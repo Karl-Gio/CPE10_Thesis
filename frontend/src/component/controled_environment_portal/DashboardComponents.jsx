@@ -7,9 +7,46 @@ import Navbar from 'react-bootstrap/Navbar';
 import Button from 'react-bootstrap/Button';
 import Badge from 'react-bootstrap/Badge';
 import ProgressBar from 'react-bootstrap/ProgressBar';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 
 // --- COMPONENT 1: NAVBAR ---
+// Pass 'user' as a prop from your parent component (e.g., Dashboard or App)
 export function TopBar() {
+  const navigate = useNavigate();
+  const [userName, setUserName] = useState('');
+
+  // 1. Fetch User Name on Component Mount
+  useEffect(() => {
+    const userString = localStorage.getItem('user'); // Get the string
+    if (userString) {
+      const userObject = JSON.parse(userString); // Convert string back to Object
+      setUserName(userObject.name); // Access the 'name' property
+    }
+  }, []);
+
+  // 2. Handle Logout Logic
+  const handleLogout = async () => {
+    const token = localStorage.getItem('token'); // Matches your Login.js key
+
+    try {
+      // Optional: Tell Backend to invalidate token
+      await axios.post('http://localhost:8000/api/logout', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+
+    // 3. Clear Local Storage (Crucial)
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // 4. Redirect to Login
+    navigate('/');
+  };
+
   return (
     <Navbar bg="success" variant="dark" className="shadow-sm">
       <Container>
@@ -17,7 +54,16 @@ export function TopBar() {
           🌱 Controlled Environment Portal
         </Navbar.Brand>
         <div className="text-white">
-          Welcome, Jesh | <Button variant="outline-light" size="sm" className="ms-2">Logout</Button>
+          {/* Display the variable we set in useEffect */}
+          Welcome, {userName || 'User'} | 
+          <Button 
+            variant="outline-light" 
+            size="sm" 
+            className="ms-2" 
+            onClick={handleLogout}
+          >
+            Logout
+          </Button>
         </div>
       </Container>
     </Navbar>
