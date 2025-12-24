@@ -17,7 +17,7 @@ export function TopBar() {
           🌱 Controlled Environment Portal
         </Navbar.Brand>
         <div className="text-white">
-          Welcome, Josh | <Button variant="outline-light" size="sm" className="ms-2">Logout</Button>
+          Welcome, Jesh | <Button variant="outline-light" size="sm" className="ms-2">Logout</Button>
         </div>
       </Container>
     </Navbar>
