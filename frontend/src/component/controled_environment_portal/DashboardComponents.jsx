@@ -9,7 +9,7 @@ import Badge from 'react-bootstrap/Badge';
 import ProgressBar from 'react-bootstrap/ProgressBar';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 // --- COMPONENT 1: NAVBAR ---
 // Pass 'user' as a prop from your parent component (e.g., Dashboard or App)
