@@ -1,16 +1,20 @@
 import { Routes, Route } from 'react-router-dom'
-import Page from './component/Controled_Environment_Portal/Page'
 import Login from './component/User/Login'
 import Register from './component/User/Register'
-import AgriVisionDashboard from './component/AgriVision/AgriVisionDashboard'
+import DashboardPage from './component/System_Dashboard/DashboardPage'
+import VisualMonitoringDashboard from './component/Visual_Monitoring/VisualMonitoringDashboard'
+import ParametersPage from './component/System_Configuration/ParametersPage'
+import PredictionPage from './component/Growth Analytics_&_Prediction/PredictionPage'
 
 function App() {
   return (
       <Routes>
-        <Route path="/dashboard" element={<Page />} />
-        <Route path="/AgriDashboard" element={<AgriVisionDashboard />} />
-        <Route path="/register" element={<Register />} />
         <Route path="/" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/parameters" element={<ParametersPage />} />
+        <Route path="/validation" element={<VisualMonitoringDashboard />} />
+        <Route path="/prediction" element={<PredictionPage />} />
       </Routes>
   )
 }
