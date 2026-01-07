@@ -1,55 +1,29 @@
 import Card from "react-bootstrap/Card";
-import Button from "react-bootstrap/Button";
 
-export default function LiveFeedSection({ camera }) {
+export default function LiveFeedSection({ cameraActive, onToggleCam }) {
   return (
     <Card className="border-0 shadow-sm rounded-4">
       <Card.Body className="p-0">
-        <div
-          className="position-relative rounded-4 overflow-hidden"
-          style={{
-            height: 420,
-            background: "linear-gradient(180deg, #0b1220, #0f172a)",
-            border: "1px solid rgba(15,23,42,0.08)",
-          }}
-        >
-          {/* top-left label */}
-          <div
-            className="position-absolute top-0 start-0 m-3 px-2 py-1 rounded-2"
-            style={{
-              fontSize: 12,
-              background: "rgba(0,0,0,0.35)",
-              color: "#e5e7eb",
-              letterSpacing: 0.5,
-            }}
-          >
-            {camera?.name || "CAM-01"} • LIVE
+        <div className="position-relative rounded-4 overflow-hidden" style={{ height: 420, background: "#000" }}>
+          
+          <img src="http://localhost:5000/video_feed" alt="Stream" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+
+          {/* Camera Control Button */}
+          <div className="position-absolute bottom-0 end-0 m-3">
+            <button 
+              onClick={onToggleCam}
+              className={`btn ${cameraActive ? 'btn-danger' : 'btn-success'} rounded-pill px-3 shadow`}
+            >
+              {cameraActive ? "Stop Camera" : "Start Camera"}
+            </button>
           </div>
 
-          {/* corner markers (simple) */}
-          <div
-            className="position-absolute top-0 start-0"
-            style={{ width: 18, height: 18, borderLeft: "2px solid #22c55e", borderTop: "2px solid #22c55e", margin: 16 }}
-          />
-          <div
-            className="position-absolute top-0 end-0"
-            style={{ width: 18, height: 18, borderRight: "2px solid #22c55e", borderTop: "2px solid #22c55e", margin: 16 }}
-          />
-          <div
-            className="position-absolute bottom-0 start-0"
-            style={{ width: 18, height: 18, borderLeft: "2px solid #22c55e", borderBottom: "2px solid #22c55e", margin: 16 }}
-          />
-          <div
-            className="position-absolute bottom-0 end-0"
-            style={{ width: 18, height: 18, borderRight: "2px solid #22c55e", borderBottom: "2px solid #22c55e", margin: 16 }}
-          />
-
-          {/* Center capture button */}
-          <div className="position-absolute top-50 start-50 translate-middle">
-            <Button variant="light" className="px-4 py-2 rounded-3">
-              📷 Capture Frame
-            </Button>
-          </div>
+          {/* LIVE indicator (Only show if cameraActive is true) */}
+          {cameraActive && (
+            <div className="position-absolute top-0 start-0 m-3 px-2 py-1 bg-dark text-white rounded-2 small">
+               ● LIVE
+            </div>
+          )}
         </div>
       </Card.Body>
     </Card>
