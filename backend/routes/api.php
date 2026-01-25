@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ParameterController;
 
 // Public Routes (No login needed)
 Route::post('/register', [AuthController::class, 'register']);
@@ -21,3 +22,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Add your sensor routes here later!
     // Route::get('/sensors', [SensorController::class, 'index']);
 });
+
+Route::get('/parameters', [ParameterController::class, 'index']);
+Route::post('/parameters', [ParameterController::class, 'store']);

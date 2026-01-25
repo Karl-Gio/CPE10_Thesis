@@ -8,37 +8,39 @@ import LiveFeedSection from "./LiveFeedSection";
 import InfoSidebar from "./InfoSidebar";
 import { SideBar, DashboardHeader } from "../Layout/LayoutComponents";
 
+// CONSTANT: Palitan ito ng IP ng RPi kung sa Laptop ka nagbubukas
+const API_URL = "http://localhost:5000"; 
+
 export default function VisualMonitoringDashboard() {
+  // FIX 1: Set camera_active to FALSE by default (Sync with Python)
   const [systemState, setSystemState] = useState({
-    total: 0,
-    radicle: 0,
-    cotyledons: 0,
-    true_leaves: 0,
-    camera_active: true,
+    pechay_detected: 0, // Renamed from total/radicle to match Python stats
+    seedTarget: 30,
+    confidenceScore: 0,
+    camera_active: false, // <--- ITO ANG SUSI PARA HINDI MAG-CRASH
     is_processing: false,
-    seedTarget: 30 // Set your target here
+    view_mode: "normal"
   });
 
-  // Polling the Python backend for data every 1 second
+  // Polling the Python backend for data every 500ms (Mas mabilis response)
   useEffect(() => {
     const interval = setInterval(() => {
-      fetch("http://localhost:5000/status")
+      fetch(`${API_URL}/status`)
         .then((res) => res.json())
         .then((data) => {
+          // Merge backend data with local state safely
           setSystemState((prev) => ({ ...prev, ...data }));
         })
         .catch((err) => console.error("Flask Server not reachable", err));
-    }, 1000);
+    }, 500); // 500ms is better for UI responsiveness
 
     return () => clearInterval(interval);
   }, []);
 
-  const toggleCam = () => {
-    fetch("http://localhost:5000/toggle_camera", { method: 'POST' });
-  };
-
-  const toggleInference = () => {
-    fetch("http://localhost:5000/toggle_inference", { method: 'POST' });
+  // FIX 2: Update state based on Child Component's action
+  // Ang LiveFeedSection na ang tumatawag sa API, dito ia-update lang natin ang UI
+  const handleCamToggle = (newStatus) => {
+    setSystemState(prev => ({ ...prev, camera_active: newStatus }));
   };
 
   return (
@@ -51,17 +53,17 @@ export default function VisualMonitoringDashboard() {
             <Card.Body className="p-4">
               <h3 className="fw-bold mb-4">Visual Validation</h3>
               <Row className="g-4">
+                {/* LIVE FEED SECTION */}
                 <Col lg={8}>
                   <LiveFeedSection 
                     cameraActive={systemState.camera_active} 
-                    onToggleCam={toggleCam} 
+                    onToggleCam={handleCamToggle} 
                   />
                 </Col>
+
+                {/* INFO SIDEBAR */}
                 <Col lg={4}>
-                  <InfoSidebar 
-                    data={systemState} 
-                    onInference={toggleInference} 
-                  />
+                  <InfoSidebar data={systemState} />
                 </Col>
               </Row>
             </Card.Body>

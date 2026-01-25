@@ -27,7 +27,9 @@ ChartJS.register(
   Legend
 );
 
-/* ---------------- Metric Card ---------------- */
+import React, { useState, useEffect } from "react";
+
+/* ---------------- Reusable Metric Card ---------------- */
 
 function MetricCard({ title, value, badgeText, subLeft, subRight, icon }) {
   return (
@@ -62,92 +64,116 @@ function MetricCard({ title, value, badgeText, subLeft, subRight, icon }) {
   );
 }
 
-/* ---------------- Metric Grid ---------------- */
-
+/* ---------------- Metric Grid (Dynamic) ---------------- */
 export function MetricGrid() {
+  // 1. Create state for live sensor data
+  const [liveData, setLiveData] = useState({
+    temperature: 0,
+    humidity: 0,
+    pechay_detected: 0
+  });
+
+  // 2. Fetch data from Flask api.py
+  useEffect(() => {
+    const fetchStats = () => {
+      fetch("http://192.168.18.93:5000/status")
+        .then((res) => res.json())
+        .then((data) => {
+          setLiveData(data);
+        })
+        .catch((err) => console.error("API Error:", err));
+    };
+
+    const interval = setInterval(fetchStats, 2000); // Update every 2 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // 3. Complete list (Walang bawas)
+  const sensorMetrics = [
+    {
+      title: "Ambient Temp",
+      value: `${liveData.temperature.toFixed(2)}°C`, // LIVE DATA
+      badgeText: liveData.temperature > 20 && liveData.temperature < 32 ? "Optimal" : "Warning",
+      subLeft: "Target: 25.0°C",
+      icon: "⚡",
+    },
+    {
+      title: "Ambient Hum",
+      value: `${liveData.humidity.toFixed(2)}%`, // LIVE DATA
+      badgeText: "Optimal",
+      subLeft: "Target: 70.0%",
+      icon: "🧪",
+    },
+    {
+      title: "Light Intensity",
+      value: "247.0 lx",
+      badgeText: null,
+      subLeft: "Status: Adequate",
+      icon: "☀️",
+    },
+    {
+      title: "Soil Moisture",
+      value: "29.46%",
+      badgeText: null,
+      subLeft: "Target: 30%",
+      icon: "☁️",
+    },
+    {
+      title: "Soil Humidity",
+      value: "56.04%",
+      badgeText: null,
+      subLeft: "Status: Monitoring",
+      icon: "💧",
+    },
+    {
+      title: "Soil Temp",
+      value: "23.23°C",
+      badgeText: null,
+      subLeft: "Status: Stable",
+      icon: "🌡️",
+    },
+    {
+      title: "Soil pH",
+      value: "6.5 pH",
+      badgeText: "Optimal",
+      subLeft: "Target: 6.5",
+      icon: "🧫",
+    },
+    {
+      title: "Pechay Count", // Bonus: Para makita mo rin ang AI status
+      value: liveData.pechay_detected,
+      badgeText: "AI Live",
+      subLeft: "Status: Detecting",
+      icon: "🥬",
+    },
+  ];
+
   return (
     <Row className="g-3 mb-3">
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Ambient Temp"
-          value="24.83°C"
-          badgeText="Optimal"
-          subLeft="Target: 25.0°C"
-          icon="⚡"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Ambient Hum"
-          value="68.91%"
-          badgeText="Optimal"
-          subLeft="Target: 70.0%"
-          icon="🧪"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Light Intensity"
-          value="247.0 lx"
-          subLeft="Status: Adequate"
-          icon="☀️"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Soil Moisture"
-          value="29.46%"
-          subLeft="Target: 30%"
-          icon="☁️"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Soil Humidity"
-          value="56.04%"
-          subLeft="Status: Monitoring"
-          icon="💧"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Soil Temp"
-          value="23.23°C"
-          subLeft="Status: Stable"
-          icon="🌡️"
-        />
-      </Col>
-
-      <Col md={6} xl={3}>
-        <MetricCard
-          title="Soil pH"
-          value="6.5 pH"
-          badgeText="Optimal"
-          subLeft="Target: 6.5"
-          icon="🧫"
-        />
-      </Col>
+      {sensorMetrics.map((metric, index) => (
+        <Col key={index} md={6} xl={3}>
+          <MetricCard
+            title={metric.title}
+            value={metric.value}
+            badgeText={metric.badgeText}
+            subLeft={metric.subLeft}
+            icon={metric.icon}
+          />
+        </Col>
+      ))}
     </Row>
   );
 }
 
-/* ---------------- Trends + Health ---------------- */
+/* ---------------- Trends Chart (Dynamic) ---------------- */
 
-function EnvironmentalTrendsChart() {
-  // Sample labels like your screenshot
-  const labels = ["21:00", "21:01", "21:02", "21:03", "21:04", "21:05", "21:06", "21:07"];
-
+function EnvironmentalTrendsChart({ timeLabels, temperatureData, humidityData }) {
   const data = {
-    labels,
+    labels: timeLabels,
     datasets: [
       {
         label: "Temp (°C)",
-        data: [25.0, 24.6, 24.9, 24.7, 24.9, 25.0, 25.0, 24.8],
+        data: temperatureData,
         borderColor: "#00b37a",
         backgroundColor: "transparent",
         borderWidth: 2,
@@ -156,39 +182,29 @@ function EnvironmentalTrendsChart() {
       },
       {
         label: "Humidity (%)",
-        data: [70.5, 69.7, 69.0, 69.5, 70.8, 71.0, 69.2, 70.6],
+        data: humidityData,
         borderColor: "#2f6bff",
         backgroundColor: "transparent",
         borderWidth: 2,
         tension: 0.35,
         pointRadius: 0,
-        borderDash: [6, 6], // dashed blue line like the UI
+        borderDash: [6, 6],
       },
     ],
   };
 
   const options = {
     responsive: true,
-    maintainAspectRatio: false, // IMPORTANT: lets us control height with a wrapper div
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: "top",
-        labels: {
-          boxWidth: 35,
-          boxHeight: 10,
-          usePointStyle: false,
-        },
+        labels: { boxWidth: 35, boxHeight: 10, usePointStyle: false },
       },
-      tooltip: {
-        intersect: false,
-        mode: "index",
-      },
+      tooltip: { intersect: false, mode: "index" },
       title: { display: false },
     },
-    interaction: {
-      mode: "index",
-      intersect: false,
-    },
+    interaction: { mode: "index", intersect: false },
     scales: {
       x: {
         grid: { display: false },
@@ -210,7 +226,62 @@ function EnvironmentalTrendsChart() {
   );
 }
 
+/* ---------------- System Health Component (Dynamic) ---------------- */
+
+function SystemHealthCard() {
+  // DATA ARRAY: System Logs
+  const systemLogs = [
+    { label: "DB Connection", status: "OK", isSuccess: true },
+    { label: "Sensor Relay", status: "Active", isSuccess: true },
+    { label: "Last Sync", status: "Just now", isSuccess: false }, // false just removes green color
+  ];
+
+  return (
+    <Card className="shadow-sm h-100">
+      <Card.Body>
+        <h5 className="mb-3 fw-bold">System Health</h5>
+
+        <div className="p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25 mb-3">
+          <Stack direction="horizontal" gap={2}>
+            <span className="text-success">●</span>
+            <div>
+              <div className="fw-bold text-success">System Operational</div>
+              <div className="small text-muted">All sensors active</div>
+            </div>
+          </Stack>
+        </div>
+
+        <div className="text-uppercase small text-muted fw-bold mb-2">Logs</div>
+
+        {systemLogs.map((log, index) => (
+          <div
+            key={index}
+            className={`d-flex justify-content-between py-2 ${
+              index !== systemLogs.length - 1 ? "border-bottom" : ""
+            }`}
+          >
+            <span>{log.label}</span>
+            <span className={log.isSuccess ? "text-success fw-bold" : "fw-semibold"}>
+              {log.status}
+            </span>
+          </div>
+        ))}
+      </Card.Body>
+    </Card>
+  );
+}
+
+/* ---------------- Main Container ---------------- */
+
 export function TrendsAndHealth() {
+  // DATA ARRAYS: Chart Data
+  // This logic is lifted up here so it can be controlled by state later
+  const chartData = {
+    labels: ["21:00", "21:01", "21:02", "21:03", "21:04", "21:05", "21:06", "21:07"],
+    temp: [25.0, 24.6, 24.9, 24.7, 24.9, 25.0, 25.0, 24.8],
+    humidity: [70.5, 69.7, 69.0, 69.5, 70.8, 71.0, 69.2, 70.6],
+  };
+
   return (
     <Row className="g-3">
       <Col xl={8}>
@@ -223,46 +294,17 @@ export function TrendsAndHealth() {
               </Button>
             </div>
 
-            <EnvironmentalTrendsChart />
+            <EnvironmentalTrendsChart
+              timeLabels={chartData.labels}
+              temperatureData={chartData.temp}
+              humidityData={chartData.humidity}
+            />
           </Card.Body>
         </Card>
       </Col>
 
       <Col xl={4}>
-        <Card className="shadow-sm h-100">
-          <Card.Body>
-            <h5 className="mb-3 fw-bold">System Health</h5>
-
-            <div className="p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25 mb-3">
-              <Stack direction="horizontal" gap={2}>
-                <span className="text-success">●</span>
-                <div>
-                  <div className="fw-bold text-success">System Operational</div>
-                  <div className="small text-muted">All sensors active</div>
-                </div>
-              </Stack>
-            </div>
-
-            <div className="text-uppercase small text-muted fw-bold mb-2">
-              Logs
-            </div>
-
-            <div className="d-flex justify-content-between py-2 border-bottom">
-              <span>DB Connection</span>
-              <span className="text-success fw-bold">OK</span>
-            </div>
-
-            <div className="d-flex justify-content-between py-2 border-bottom">
-              <span>Sensor Relay</span>
-              <span className="text-success fw-bold">Active</span>
-            </div>
-
-            <div className="d-flex justify-content-between py-2">
-              <span>Last Sync</span>
-              <span className="fw-semibold">Just now</span>
-            </div>
-          </Card.Body>
-        </Card>
+        <SystemHealthCard />
       </Col>
     </Row>
   );
