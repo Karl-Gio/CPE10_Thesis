@@ -126,20 +126,6 @@ export function MetricGrid() {
       icon: "☁️",
     },
     {
-      title: "Soil Humidity",
-      value: "56.04%", // Walang sensor ito sa Arduino mo kaya hardcoded muna
-      badgeText: null,
-      subLeft: "Status: Monitoring",
-      icon: "💧",
-    },
-    {
-      title: "Soil Temp",
-      value: "23.23°C", // Walang sensor ito sa Arduino mo kaya hardcoded muna
-      badgeText: null,
-      subLeft: "Status: Stable",
-      icon: "🌡️",
-    },
-    {
       title: "Soil pH",
       value: `${(liveData.sPH || 0).toFixed(1)} pH`, // LIVE SOIL PH DATA!
       badgeText: "Optimal",
