@@ -25,7 +25,15 @@ export function ParameterHeader({ onReset, onSave }) {
 }
 
 /* One parameter card */
-export function ParameterField({ label, value, onChange, unit, step = "0.01" }) {
+export function ParameterField({ label, value, onChange, unit }) {
+  const handleChange = (e) => {
+    const val = e.target.value;
+    // Regex allows empty string, or numbers with optional negative sign and up to 2 decimal places
+    if (val === "" || /^-?\d*\.?\d{0,2}$/.test(val)) {
+      onChange(val);
+    }
+  };
+
   return (
     <Card className="shadow-sm border-0 rounded-4 h-100">
       <Card.Body className="p-3">
@@ -33,10 +41,10 @@ export function ParameterField({ label, value, onChange, unit, step = "0.01" }) 
 
         <InputGroup>
           <Form.Control
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={value}
-            step={step}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={handleChange}
             className="py-2"
           />
           <InputGroup.Text className="bg-white text-muted fw-semibold">
@@ -76,7 +84,6 @@ export function ParameterGrid({ values, setField }) {
           value={values.lightIntensity}
           onChange={setField("lightIntensity")}
           unit="lux"
-          step="0.1"
         />
       </Col>
 
@@ -91,29 +98,10 @@ export function ParameterGrid({ values, setField }) {
 
       <Col md={6} xl={4}>
         <ParameterField
-          label="Soil Humidity"
-          value={values.soilHumidity}
-          onChange={setField("soilHumidity")}
-          unit="%"
-        />
-      </Col>
-
-      <Col md={6} xl={4}>
-        <ParameterField
-          label="Soil Temperature"
-          value={values.soilTemp}
-          onChange={setField("soilTemp")}
-          unit="°C"
-        />
-      </Col>
-
-      <Col md={6} xl={4}>
-        <ParameterField
           label="Soil pH"
           value={values.soilPh}
           onChange={setField("soilPh")}
           unit="pH"
-          step="0.1"
         />
       </Col>
     </Row>
