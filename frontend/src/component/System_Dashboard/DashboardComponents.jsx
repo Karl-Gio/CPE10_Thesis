@@ -66,17 +66,22 @@ function MetricCard({ title, value, badgeText, subLeft, subRight, icon }) {
 
 /* ---------------- Metric Grid (Dynamic) ---------------- */
 export function MetricGrid() {
-  // 1. Create state for live sensor data
+  // 1. Initial State (Dapat eksakto sa pangalan ng variables sa api.py!)
   const [liveData, setLiveData] = useState({
-    temperature: 0,
-    humidity: 0,
+    temp: 0,
+    hum: 0,
+    lux: 0,
+    sMOIST: 0,
+    sPH: 0,
     pechay_detected: 0
   });
 
   // 2. Fetch data from Flask api.py
   useEffect(() => {
     const fetchStats = () => {
-      fetch("http://192.168.18.93:5000/status")
+      // Pinalitan ko ng localhost para sure na gagana sa mismong Pi mo. 
+      // Kung ino-open mo sa laptop mo ang site, ibalik mo sa IP address ng Pi mo (e.g., http://192.168.18.93:5000/status)
+      fetch("http://localhost:5000/status") 
         .then((res) => res.json())
         .then((data) => {
           setLiveData(data);
@@ -84,64 +89,66 @@ export function MetricGrid() {
         .catch((err) => console.error("API Error:", err));
     };
 
-    const interval = setInterval(fetchStats, 2000); // Update every 2 seconds
+    // Ginawa kong 1000ms (1 second) para mabilis ang update!
+    const interval = setInterval(fetchStats, 1000); 
     return () => clearInterval(interval);
   }, []);
 
-  // 3. Complete list (Walang bawas)
+  // 3. I-connect ang mga totoong sensor readings
   const sensorMetrics = [
     {
       title: "Ambient Temp",
-      value: `${liveData.temperature.toFixed(2)}°C`, // LIVE DATA
-      badgeText: liveData.temperature > 20 && liveData.temperature < 32 ? "Optimal" : "Warning",
+      // Nilagyan natin ng ( || 0 ) para hindi mag-crash kapag naglo-loading pa
+      value: `${(liveData.temp || 0).toFixed(2)}°C`, 
+      badgeText: liveData.temp > 20 && liveData.temp < 32 ? "Optimal" : "Warning",
       subLeft: "Target: 25.0°C",
       icon: "⚡",
     },
     {
       title: "Ambient Hum",
-      value: `${liveData.humidity.toFixed(2)}%`, // LIVE DATA
+      value: `${(liveData.hum || 0).toFixed(2)}%`, 
       badgeText: "Optimal",
       subLeft: "Target: 70.0%",
       icon: "🧪",
     },
     {
       title: "Light Intensity",
-      value: "247.0 lx",
+      value: `${(liveData.lux || 0).toFixed(1)} lx`, // LIVE LUX DATA!
       badgeText: null,
       subLeft: "Status: Adequate",
       icon: "☀️",
     },
     {
       title: "Soil Moisture",
-      value: "29.46%",
+      value: `${(liveData.sMOIST || 0).toFixed(2)}%`, // LIVE SOIL MOISTURE DATA!
       badgeText: null,
       subLeft: "Target: 30%",
       icon: "☁️",
     },
     {
       title: "Soil Humidity",
-      value: "56.04%",
+      value: "56.04%", // Walang sensor ito sa Arduino mo kaya hardcoded muna
       badgeText: null,
       subLeft: "Status: Monitoring",
       icon: "💧",
     },
     {
       title: "Soil Temp",
-      value: "23.23°C",
+      value: "23.23°C", // Walang sensor ito sa Arduino mo kaya hardcoded muna
       badgeText: null,
       subLeft: "Status: Stable",
       icon: "🌡️",
     },
     {
       title: "Soil pH",
-      value: "6.5 pH",
+      value: `${(liveData.sPH || 0).toFixed(1)} pH`, // LIVE SOIL PH DATA!
       badgeText: "Optimal",
       subLeft: "Target: 6.5",
       icon: "🧫",
     },
     {
-      title: "Pechay Count", // Bonus: Para makita mo rin ang AI status
-      value: liveData.pechay_detected,
+      title: "Pechay Count", 
+      value: liveData.pechay_detected || 0, // LIVE YOLO DETECTION!
       badgeText: "AI Live",
       subLeft: "Status: Detecting",
       icon: "🥬",

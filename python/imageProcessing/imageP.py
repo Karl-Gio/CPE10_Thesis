@@ -3,7 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 
 class ImageP:
-    def __init__(self, model_path="best.pt"):
+    def __init__(self, model_path="imageProcessing/best.pt"):
         try:
             self.model = YOLO(model_path)
             print("✅ YOLO Model Loaded!")
@@ -11,25 +11,27 @@ class ImageP:
             print(f"❌ YOLO Load Error: {e}")
             self.model = None
 
-    def detect(self, frame, conf_threshold=0.45):
+    def detect(self, frame, conf_threshold=0.5):
         if self.model is None:
-            return frame, frame, 0, 0
+            return [], 0, 0
         
-        results = self.model.predict(frame, conf=conf_threshold, verbose=False, imgsz=320)
+        # Optimized for RPi5 speed
+        results = self.model.predict(frame, conf=conf_threshold, verbose=False, imgsz=192, half=True)
+        
+        boxes_data = []
         count = len(results[0].boxes)
         avg_conf = 0
         
         if count > 0:
-            conf_sum = sum([box.conf.item() for box in results[0].boxes])
+            conf_sum = 0
+            for box in results[0].boxes:
+                # Kunin ang coordinates [x1, y1, x2, y2]
+                coords = box.xyxy[0].tolist() 
+                conf = float(box.conf[0])
+                conf_sum += conf
+                boxes_list = [int(c) for c in coords]
+                boxes_data.append({"coords": boxes_list, "conf": conf})
+            
             avg_conf = round((conf_sum / count) * 100, 1)
 
-        annotated_frame = frame.copy()
-        masked_frame = np.zeros_like(frame)
-
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
-
-        return annotated_frame, masked_frame, count, avg_conf
+        return boxes_data, count, avg_conf
