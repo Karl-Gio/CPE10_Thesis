@@ -98,10 +98,10 @@ export function ParameterGrid({ values, setField }) {
 
       <Col md={6} xl={4}>
         <ParameterField
-          label="Soil pH"
-          value={values.soilPh}
-          onChange={setField("soilPh")}
-          unit="pH"
+          label="Soil Temperature"
+          value={values.soilTemp} // Binago ang value pointer
+          onChange={setField("soilTemp")} // Binago ang update handler
+          unit="°C" // Binago ang unit
         />
       </Col>
     </Row>

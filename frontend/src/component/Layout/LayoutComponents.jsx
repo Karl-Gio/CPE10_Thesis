@@ -75,12 +75,18 @@ export function DashboardHeader({ title }) {
   const [userName, setUserName] = useState("");
 
   useEffect(() => {
-    const userString = localStorage.getItem("user");
-    if (userString) {
+  const userString = localStorage.getItem("user");
+  if (userString) {
+    try {
+      // Susubukan niyang basahin kung JSON format
       const userObject = JSON.parse(userString);
       setUserName(userObject.name || "");
+    } catch (error) {
+      // Kapag hindi JSON (tulad ng "gio" lang), ito ang gagamitin niya
+      setUserName(userString);
     }
-  }, []);
+  }
+}, []);
 
   const initial = (userName?.[0] || "U").toUpperCase();
 

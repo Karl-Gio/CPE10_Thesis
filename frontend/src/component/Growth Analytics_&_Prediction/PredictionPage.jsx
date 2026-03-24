@@ -1,3 +1,4 @@
+import React, { useState } from "react"; // Idinagdag natin ang useState
 import Container from "react-bootstrap/Container";
 import Card from "react-bootstrap/Card";
 import Row from "react-bootstrap/Row";
@@ -10,17 +11,41 @@ import {
   PredictionBottomBar,
 } from "./PredictionComponents";
 
-export default function PredictionPage() {
-  // mock values (replace later with API)
-  const data = {
-    batchId: "B-2025-001",
+// MOCK DATABASE: Dito muna tayo kukuha ng data habang wala pa yung API.
+// Pwede mo itong palitan ng totoong data from backend mo later.
+const mockDatabase = {
+  "B-2025-001": {
     datePlanted: "2025-01-01",
     totalSeeds: 30,
     germinationCount: 26,
     deltaFromYesterday: "+2 from yesterday",
     predictedHarvest: "Jan 06, 2026",
     modelAccuracy: "95.4%",
-  };
+  },
+  "B-2025-002": {
+    datePlanted: "2025-02-14",
+    totalSeeds: 50,
+    germinationCount: 42,
+    deltaFromYesterday: "+5 from yesterday",
+    predictedHarvest: "Mar 10, 2026",
+    modelAccuracy: "91.2%",
+  },
+  "B-2025-003": {
+    datePlanted: "2025-03-01",
+    totalSeeds: 40,
+    germinationCount: 15,
+    deltaFromYesterday: "+15 from yesterday",
+    predictedHarvest: "Apr 05, 2026",
+    modelAccuracy: "88.9%",
+  }
+};
+
+export default function PredictionPage() {
+  // STATE: Ito ang mag-tatrack kung anong Batch ang naka-select sa dropdown
+  const [selectedBatch, setSelectedBatch] = useState("B-2025-001");
+
+  // Kukunin natin yung data mula sa mockDatabase base sa kung ano ang naka-select
+  const data = mockDatabase[selectedBatch];
 
   return (
     <div className="d-flex" style={{ background: "#f5f7fb", minHeight: "100vh" }}>
@@ -34,7 +59,12 @@ export default function PredictionPage() {
             <Card.Body className="p-4">
               <h3 className="fw-bold mb-4">Yield Prediction Analytics</h3>
 
-              <PredictionMeta batchId={data.batchId} datePlanted={data.datePlanted} />
+              {/* Ipinasa natin ang selectedBatch at ang function para mabago ito (setSelectedBatch) */}
+              <PredictionMeta 
+                batchId={selectedBatch} 
+                datePlanted={data.datePlanted} 
+                onBatchChange={setSelectedBatch} 
+              />
 
               <Row className="g-4 mb-4">
                 <Col md={6}>
