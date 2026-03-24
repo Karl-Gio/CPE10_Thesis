@@ -46,4 +46,13 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Establish the relationship to the Parameter Configurations.
+     * A user can have many saved parameter configurations.
+     */
+    public function parameterConfigurations()
+    {
+        return $this->hasMany(ParameterConfiguration::class);
+    }
 }

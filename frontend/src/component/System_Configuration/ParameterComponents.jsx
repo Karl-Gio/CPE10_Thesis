@@ -60,49 +60,58 @@ export function ParameterField({ label, value, onChange, unit }) {
 export function ParameterGrid({ values, setField }) {
   return (
     <Row className="g-3">
+      {/* 1. Ambient Temperature */}
       <Col md={6} xl={4}>
-        <ParameterField
-          label="Ambient Temperature"
-          value={values.ambientTemp}
-          onChange={setField("ambientTemp")}
-          unit="°C"
-        />
+        <ParameterField label="Ambient Temperature" value={values.ambientTemp} onChange={setField("ambientTemp")} unit="°C" />
       </Col>
 
+      {/* 2. Ambient Humidity */}
       <Col md={6} xl={4}>
-        <ParameterField
-          label="Ambient Humidity"
-          value={values.ambientHum}
-          onChange={setField("ambientHum")}
-          unit="%"
-        />
+        <ParameterField label="Ambient Humidity" value={values.ambientHum} onChange={setField("ambientHum")} unit="%" />
       </Col>
 
+      {/* 3. Soil Moisture */}
       <Col md={6} xl={4}>
-        <ParameterField
-          label="Light Intensity"
-          value={values.lightIntensity}
-          onChange={setField("lightIntensity")}
-          unit="lux"
-        />
+        <ParameterField label="Soil Moisture" value={values.soilMoisture} onChange={setField("soilMoisture")} unit="%" />
       </Col>
 
+      {/* 4. Soil Temperature */}
       <Col md={6} xl={4}>
-        <ParameterField
-          label="Soil Moisture"
-          value={values.soilMoisture}
-          onChange={setField("soilMoisture")}
-          unit="%"
-        />
+        <ParameterField label="Soil Temperature" value={values.soilTemp} onChange={setField("soilTemp")} unit="°C" />
       </Col>
 
+      {/* 5. UV LIGHT CONFIGURATION */}
       <Col md={6} xl={4}>
-        <ParameterField
-          label="Soil Temperature"
-          value={values.soilTemp} // Binago ang value pointer
-          onChange={setField("soilTemp")} // Binago ang update handler
-          unit="°C" // Binago ang unit
-        />
+        <Card className="shadow-sm border-0 rounded-4 h-100 border-start border-primary border-4">
+          <Card.Body className="p-3">
+            <div className="text-uppercase small text-primary fw-bold mb-2">UV Light Schedule</div>
+            <Form.Group className="mb-2">
+              <Form.Label className="small text-muted mb-0">Start Time</Form.Label>
+              <Form.Control type="time" value={values.uvStart} onChange={(e) => setField("uvStart")(e.target.value)} />
+            </Form.Group>
+            <Form.Group>
+              <Form.Label className="small text-muted mb-0">Duration (Minutes)</Form.Label>
+              <Form.Control type="number" value={values.uvDuration} onChange={(e) => setField("uvDuration")(e.target.value)} />
+            </Form.Group>
+          </Card.Body>
+        </Card>
+      </Col>
+
+      {/* 6. LED LIGHT CONFIGURATION */}
+      <Col md={6} xl={4}>
+        <Card className="shadow-sm border-0 rounded-4 h-100 border-start border-warning border-4">
+          <Card.Body className="p-3">
+            <div className="text-uppercase small text-warning fw-bold mb-2">LED Light Schedule</div>
+            <Form.Group className="mb-2">
+              <Form.Label className="small text-muted mb-0">Start Time</Form.Label>
+              <Form.Control type="time" value={values.ledStart} onChange={(e) => setField("ledStart")(e.target.value)} />
+            </Form.Group>
+            <Form.Group>
+              <Form.Label className="small text-muted mb-0">Duration (Minutes)</Form.Label>
+              <Form.Control type="number" value={values.ledDuration} onChange={(e) => setField("ledDuration")(e.target.value)} />
+            </Form.Group>
+          </Card.Body>
+        </Card>
       </Col>
     </Row>
   );

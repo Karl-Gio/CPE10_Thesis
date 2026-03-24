@@ -4,7 +4,7 @@ import Card from "react-bootstrap/Card";
 import Button from "react-bootstrap/Button";
 import Badge from "react-bootstrap/Badge";
 import Stack from "react-bootstrap/Stack";
-
+import React, { useState, useEffect } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,47 +17,27 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-import React, { useState, useEffect } from "react";
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 /* ---------------- Reusable Metric Card ---------------- */
-
-function MetricCard({ title, value, badgeText, subLeft, subRight, icon }) {
+function MetricCard({ title, value, badgeText, subLeft, icon }) {
   return (
-    <Card className="shadow-sm h-100">
+    <Card className="shadow-sm h-100 border-0 rounded-4">
       <Card.Body>
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="text-uppercase small text-muted fw-bold">{title}</div>
-          <div
-            className="bg-light d-flex align-items-center justify-content-center"
-            style={{ width: 34, height: 34, borderRadius: 10 }}
-          >
+          <div className="bg-light d-flex align-items-center justify-content-center" style={{ width: 34, height: 34, borderRadius: 10 }}>
             {icon}
           </div>
         </div>
-
         <div className="fs-3 fw-bold">{value}</div>
-
         <div className="d-flex align-items-center gap-2 mt-2">
-          {badgeText ? (
-            <Badge
-              bg="success"
-              className="bg-opacity-25 text-success border border-success"
-            >
+          {badgeText && (
+            <Badge bg={badgeText === "Warning" || badgeText === "Dry" ? "danger" : "success"} className="bg-opacity-25 text-dark border">
               {badgeText}
             </Badge>
-          ) : null}
+          )}
           <small className="text-muted">{subLeft}</small>
-          {subRight ? <small className="text-muted">• {subRight}</small> : null}
         </div>
       </Card.Body>
     </Card>
@@ -66,174 +46,69 @@ function MetricCard({ title, value, badgeText, subLeft, subRight, icon }) {
 
 /* ---------------- Metric Grid (Dynamic) ---------------- */
 export function MetricGrid() {
-  // 1. Initial State (Dapat eksakto sa pangalan ng variables sa api.py!)
   const [liveData, setLiveData] = useState({
-    temp: 0,
-    hum: 0,
-    lux: 0,
-    sMOIST: 0,
-    sPH: 0,
-    pechay_detected: 0
+    temp: 0, hum: 0, lux: 0, sMOIST: 0, sTEMP: 0, pechay_detected: 0
   });
 
-  // 2. Fetch data from Flask api.py
   useEffect(() => {
-    const fetchStats = () => {
-      // Pinalitan ko ng localhost para sure na gagana sa mismong Pi mo. 
-      // Kung ino-open mo sa laptop mo ang site, ibalik mo sa IP address ng Pi mo (e.g., http://192.168.18.93:5000/status)
-      fetch("http://localhost:5000/status") 
-        .then((res) => res.json())
-        .then((data) => {
-          setLiveData(data);
-        })
-        .catch((err) => console.error("API Error:", err));
+    const fetchStats = async () => {
+      try {
+        // GINAGAMIT ANG VITE PROXY
+        const res = await fetch("/api_python/status");
+        if (!res.ok) throw new Error("Network response was not ok");
+        const data = await res.json();
+        setLiveData(data);
+      } catch (err) {
+        console.error("Hardware API Error:", err.message);
+      }
     };
 
-    // Ginawa kong 1000ms (1 second) para mabilis ang update!
-    const interval = setInterval(fetchStats, 1000); 
+    fetchStats();
+    const interval = setInterval(fetchStats, 2000); 
     return () => clearInterval(interval);
   }, []);
 
-  // 3. I-connect ang mga totoong sensor readings
   const sensorMetrics = [
-    {
-      title: "Ambient Temp",
-      value: `${(liveData.temp || 0).toFixed(2)}°C`, 
-      badgeText: liveData.temp > 20 && liveData.temp < 32 ? "Optimal" : "Warning",
-      subLeft: "Target: 25.0°C",
-      icon: "⚡",
-    },
-    {
-      title: "Ambient Hum",
-      value: `${(liveData.hum || 0).toFixed(2)}%`, 
-      badgeText: "Optimal",
-      subLeft: "Target: 70.0%",
-      icon: "🧪",
-    },
-    {
-      title: "Light Intensity",
-      value: `${(liveData.lux || 0).toFixed(1)} lx`, 
-      badgeText: null,
-      subLeft: "Status: Adequate",
-      icon: "☀️",
-    },
-    {
-      title: "Soil Temp", // <--- Pinalitan natin mula sa Soil pH
-      value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, // Make sure sTEMP ang variable mo sa api.py
-      badgeText: "Optimal",
-      subLeft: "Target: 25.0°C",
-      icon: "🌡️",
-    },
-    {
-      title: "Soil Moisture",
-      value: `${(liveData.sMOIST || 0).toFixed(2)}%`, 
-      badgeText: null,
-      subLeft: "Target: 30%",
-      icon: "☁️",
-    },
-    {
-      title: "Pechay Count", 
-      value: liveData.pechay_detected || 0, 
-      badgeText: "AI Live",
-      subLeft: "Status: Detecting",
-      icon: "🥬",
-    },
+    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, badgeText: liveData.temp > 32 ? "Warning" : "Optimal", subLeft: "SHT45 Sensor", icon: "🌡️" },
+    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, badgeText: "Optimal", subLeft: "SHT45 Sensor", icon: "💧" },
+    { title: "Light Intensity", value: `${(liveData.lux || 0).toFixed(0)} lx`, badgeText: null, subLeft: "BH1750 Sensor", icon: "☀️" },
+    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, badgeText: "Optimal", subLeft: "Soil Probe", icon: "🏜️" },
+    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, badgeText: liveData.sMOIST < 20 ? "Dry" : "Optimal", subLeft: "Capacitive Sensor", icon: "🌱" },
+    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "AI Live", subLeft: "YOLOv8 Detect", icon: "🥬" },
   ];
-  
 
   return (
     <Row className="g-3 mb-3">
       {sensorMetrics.map((metric, index) => (
-        <Col key={index} md={6} xl={3}>
-          <MetricCard
-            title={metric.title}
-            value={metric.value}
-            badgeText={metric.badgeText}
-            subLeft={metric.subLeft}
-            icon={metric.icon}
-          />
-        </Col>
+        <Col key={index} md={6} xl={4}><MetricCard {...metric} /></Col>
       ))}
     </Row>
   );
 }
 
-/* ---------------- Trends Chart (Dynamic) ---------------- */
-
-function EnvironmentalTrendsChart({ timeLabels, temperatureData, humidityData }) {
+/* ---------------- Trends Chart ---------------- */
+export function EnvironmentalTrendsChart({ timeLabels, temperatureData, humidityData }) {
   const data = {
     labels: timeLabels,
     datasets: [
-      {
-        label: "Temp (°C)",
-        data: temperatureData,
-        borderColor: "#00b37a",
-        backgroundColor: "transparent",
-        borderWidth: 2,
-        tension: 0.35,
-        pointRadius: 0,
-      },
-      {
-        label: "Humidity (%)",
-        data: humidityData,
-        borderColor: "#2f6bff",
-        backgroundColor: "transparent",
-        borderWidth: 2,
-        tension: 0.35,
-        pointRadius: 0,
-        borderDash: [6, 6],
-      },
+      { label: "Temp (°C)", data: temperatureData, borderColor: "#00b37a", tension: 0.35, pointRadius: 0 },
+      { label: "Hum (%)", data: humidityData, borderColor: "#2f6bff", borderDash: [6, 6], tension: 0.35, pointRadius: 0 },
     ],
-  };
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "top",
-        labels: { boxWidth: 35, boxHeight: 10, usePointStyle: false },
-      },
-      tooltip: { intersect: false, mode: "index" },
-      title: { display: false },
-    },
-    interaction: { mode: "index", intersect: false },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: { maxRotation: 0, autoSkip: true },
-      },
-      y: {
-        suggestedMin: 20,
-        suggestedMax: 80,
-        ticks: { stepSize: 10 },
-        grid: { color: "rgba(0,0,0,0.06)" },
-      },
-    },
   };
 
   return (
     <div className="bg-white rounded border" style={{ height: 280, padding: 12 }}>
-      <Line data={data} options={options} />
+      <Line data={data} options={{ responsive: true, maintainAspectRatio: false }} />
     </div>
   );
 }
 
-/* ---------------- System Health Component (Dynamic) ---------------- */
-
-function SystemHealthCard() {
-  // DATA ARRAY: System Logs
-  const systemLogs = [
-    { label: "DB Connection", status: "OK", isSuccess: true },
-    { label: "Sensor Relay", status: "Active", isSuccess: true },
-    { label: "Last Sync", status: "Just now", isSuccess: false }, // false just removes green color
-  ];
-
+/* ---------------- System Health ---------------- */
+export function SystemHealthCard() {
   return (
-    <Card className="shadow-sm h-100">
+    <Card className="shadow-sm h-100 border-0 rounded-4">
       <Card.Body>
         <h5 className="mb-3 fw-bold">System Health</h5>
-
         <div className="p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25 mb-3">
           <Stack direction="horizontal" gap={2}>
             <span className="text-success">●</span>
@@ -243,62 +118,39 @@ function SystemHealthCard() {
             </div>
           </Stack>
         </div>
-
         <div className="text-uppercase small text-muted fw-bold mb-2">Logs</div>
-
-        {systemLogs.map((log, index) => (
-          <div
-            key={index}
-            className={`d-flex justify-content-between py-2 ${
-              index !== systemLogs.length - 1 ? "border-bottom" : ""
-            }`}
-          >
-            <span>{log.label}</span>
-            <span className={log.isSuccess ? "text-success fw-bold" : "fw-semibold"}>
-              {log.status}
-            </span>
-          </div>
-        ))}
+        <div className="d-flex justify-content-between py-2 border-bottom">
+          <span>Hardware Interface</span>
+          <span className="text-success fw-bold">Connected</span>
+        </div>
+        <div className="d-flex justify-content-between py-2">
+          <span>AI Inference</span>
+          <span className="text-success fw-bold">Active</span>
+        </div>
       </Card.Body>
     </Card>
   );
 }
 
 /* ---------------- Main Container ---------------- */
-
 export function TrendsAndHealth() {
-  // DATA ARRAYS: Chart Data
-  // This logic is lifted up here so it can be controlled by state later
   const chartData = {
-    labels: ["21:00", "21:01", "21:02", "21:03", "21:04", "21:05", "21:06", "21:07"],
-    temp: [25.0, 24.6, 24.9, 24.7, 24.9, 25.0, 25.0, 24.8],
-    humidity: [70.5, 69.7, 69.0, 69.5, 70.8, 71.0, 69.2, 70.6],
+    labels: ["16:00", "16:01", "16:02", "16:03", "16:04", "16:05"],
+    temp: [25.0, 24.8, 25.1, 24.9, 25.0, 25.2],
+    humidity: [70, 69, 71, 70, 68, 70],
   };
 
   return (
     <Row className="g-3">
       <Col xl={8}>
-        <Card className="shadow-sm h-100">
+        <Card className="shadow-sm h-100 border-0 rounded-4">
           <Card.Body>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="mb-0 fw-bold">Environmental Trends</h5>
-              <Button size="sm" variant="light" className="border">
-                Live Feed
-              </Button>
-            </div>
-
-            <EnvironmentalTrendsChart
-              timeLabels={chartData.labels}
-              temperatureData={chartData.temp}
-              humidityData={chartData.humidity}
-            />
+            <h5 className="mb-3 fw-bold">Environmental Trends</h5>
+            <EnvironmentalTrendsChart timeLabels={chartData.labels} temperatureData={chartData.temp} humidityData={chartData.humidity} />
           </Card.Body>
         </Card>
       </Col>
-
-      <Col xl={4}>
-        <SystemHealthCard />
-      </Col>
+      <Col xl={4}><SystemHealthCard /></Col>
     </Row>
   );
 }
