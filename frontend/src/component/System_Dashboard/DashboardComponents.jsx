@@ -98,7 +98,6 @@ export function MetricGrid() {
   const sensorMetrics = [
     {
       title: "Ambient Temp",
-      // Nilagyan natin ng ( || 0 ) para hindi mag-crash kapag naglo-loading pa
       value: `${(liveData.temp || 0).toFixed(2)}°C`, 
       badgeText: liveData.temp > 20 && liveData.temp < 32 ? "Optimal" : "Warning",
       subLeft: "Target: 25.0°C",
@@ -113,33 +112,34 @@ export function MetricGrid() {
     },
     {
       title: "Light Intensity",
-      value: `${(liveData.lux || 0).toFixed(1)} lx`, // LIVE LUX DATA!
+      value: `${(liveData.lux || 0).toFixed(1)} lx`, 
       badgeText: null,
       subLeft: "Status: Adequate",
       icon: "☀️",
     },
     {
+      title: "Soil Temp", // <--- Pinalitan natin mula sa Soil pH
+      value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, // Make sure sTEMP ang variable mo sa api.py
+      badgeText: "Optimal",
+      subLeft: "Target: 25.0°C",
+      icon: "🌡️",
+    },
+    {
       title: "Soil Moisture",
-      value: `${(liveData.sMOIST || 0).toFixed(2)}%`, // LIVE SOIL MOISTURE DATA!
+      value: `${(liveData.sMOIST || 0).toFixed(2)}%`, 
       badgeText: null,
       subLeft: "Target: 30%",
       icon: "☁️",
     },
     {
-      title: "Soil pH",
-      value: `${(liveData.sPH || 0).toFixed(1)} pH`, // LIVE SOIL PH DATA!
-      badgeText: "Optimal",
-      subLeft: "Target: 6.5",
-      icon: "🧫",
-    },
-    {
       title: "Pechay Count", 
-      value: liveData.pechay_detected || 0, // LIVE YOLO DETECTION!
+      value: liveData.pechay_detected || 0, 
       badgeText: "AI Live",
       subLeft: "Status: Detecting",
       icon: "🥬",
     },
   ];
+  
 
   return (
     <Row className="g-3 mb-3">
