@@ -43,3 +43,5 @@ importances = model.feature_importances_
 print("\n--- Impact on Germination Speed ---")
 for name, imp in zip(features, importances):
     print(f"{name}: {imp*100:.1f}% impact")
+
+    
