@@ -1,10 +1,10 @@
 import serial
 import threading
 import time
-import json # Pinalitan natin ang 're' ng 'json'
+import json 
 
 class ArduinoReader:
-    def __init__(self, port='/dev/ttyACM0', baud=9600): # BINAGO ANG BAUD RATE TO 9600
+    def __init__(self, port='/dev/ttyACM0', baud=9600): 
         self.port = port
         self.baud = baud
         
@@ -41,7 +41,7 @@ class ArduinoReader:
                     # Basahin ang isang buong linya mula sa Arduino
                     line = self.ser.readline().decode('utf-8').strip()
                     
-                    # Siguraduhing mukhang JSON yung format (nagsisimula sa { at nagtatapos sa })
+                    # Siguraduhing mukhang JSON yung format
                     if line.startswith('{') and line.endswith('}'):
                         # I-convert ang text na JSON papunta sa Python Dictionary
                         parsed_data = json.loads(line)
@@ -53,11 +53,8 @@ class ArduinoReader:
                         self.data["sMOIST"] = parsed_data.get("sMOIST", self.data["sMOIST"])
                         self.data["sPH"] = parsed_data.get("sPH", self.data["sPH"])
                         
-                        # Tanggalin ang comment sa print para makita mo sa terminal kung pumapasok:
-                        # print("Updated Data:", self.data)
-                        
                 except json.JSONDecodeError:
-                    print("❌ Error: Hindi ma-parse ang JSON. Baka putol ang data.")
+                    pass # Wag na natin i-print para hindi ma-spam ang terminal kung may putol na data
                 except Exception as e:
                     print(f"❌ Serial Read Error: {e}")
             
@@ -68,6 +65,26 @@ class ArduinoReader:
         # Ito ang tatawagin ng api.py mo para kunin yung latest na data
         return self.data
 
+    # ==========================================
+    # BAGONG FUNCTION: Taga-padala sa Arduino
+    # ==========================================
+    def send_command(self, command_string):
+        """
+        Nagpapadala ng command string (e.g., "<24.5,75.0,500,40>") sa Arduino.
+        """
+        if self.ser and self.ser.is_open:
+            try:
+                # Importante ang .encode('utf-8') para maging bytes ang string
+                self.ser.write(command_string.encode('utf-8'))
+                print(f"✅ Successfully sent to Arduino: {command_string}")
+                return True
+            except Exception as e:
+                print(f"❌ Failed to send command to Arduino: {e}")
+                return False
+        else:
+            print("❌ Serial connection is not open.")
+            return False
+
 # --- PARA PANG-TEST KUNG GUMAGANA ---
 if __name__ == "__main__":
     reader = ArduinoReader()
@@ -76,6 +93,10 @@ if __name__ == "__main__":
     try:
         while True:
             print(reader.get_data())
+            
+            # Pwede mo rin i-test dito yung pag-send by uncommenting this:
+            # reader.send_command("<28.5,75.0,500.0,40.0>")
+            
             time.sleep(2) # Mag-print kada 2 segundo
     except KeyboardInterrupt:
         print("Exiting...")

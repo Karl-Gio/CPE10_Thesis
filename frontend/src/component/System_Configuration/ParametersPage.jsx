@@ -31,9 +31,21 @@ export default function ParametersPage() {
   const onReset = () => setValues(initialValues);
 
   const onSave = async () => {
-    // TODO: replace with backend call
-    console.log("Saving:", values);
-    alert("Saved (mock)!");
+    try {
+      // Ipapasa nito yung nilagay mong numbers sa website papunta sa Python
+      const response = await fetch("http://localhost:5000/api/update_params", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values)
+      });
+      
+      if(response.ok) {
+        alert("Parameters Successfully Saved and Sent to Control System!");
+      }
+    } catch (error) {
+      console.error("Error connecting to backend", error);
+      alert("Failed to send data to Raspberry Pi.");
+    }
   };
 
   return (

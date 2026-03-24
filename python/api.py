@@ -4,7 +4,7 @@ import threading
 import os
 import datetime
 import numpy as np
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from ultralytics import YOLO
 
@@ -248,6 +248,30 @@ def capture_image():
     with lock:
         cv2.imwrite(filename, output_frame)
     return jsonify({"status": "success", "file": filename})
+
+@app.route('/api/update_params', methods=['POST'])
+def update_params():
+    data = request.json
+    
+    # 1. Kukunin ang data galing sa React
+    # Gumamit tayo ng default values (.get) in case may missing na data
+    t = data.get('ambientTemp', 28.5)
+    h = data.get('ambientHum', 75.0)
+    l = data.get('lightIntensity', 500.0)
+    m = data.get('soilMoisture', 40.0)
+    
+    # 2. Ipa-format natin para mabasa ng Arduino: <TEMP,HUM,LUX,MOIST>
+    command = f"<{t},{h},{l},{m}>"
+    print(f"Sending to Arduino: {command}")
+    
+    # 3. Ipadala sa Arduino gamit ang ArduinoReader
+    try:
+        # Tatawagin natin yung bagong function na idadagdag natin sa arduino_reader.py
+        sensor.send_command(command) 
+        return jsonify({"status": "success", "message": "Parameters sent to Arduino!"})
+    except Exception as e:
+        print(f"Error sending parameters: {e}")
+        return jsonify({"status": "error", "message": "Failed to communicate with Arduino"}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
