@@ -53,6 +53,6 @@ class User extends Authenticatable
      */
     public function parameterConfigurations()
     {
-        return $this->hasMany(ParameterConfiguration::class);
+        return $this->hasMany(\App\Models\ParameterConfiguration::class);
     }
 }

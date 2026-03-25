@@ -9,21 +9,24 @@ class ParameterConfiguration extends Model
 {
     use HasFactory;
 
+    protected $table = 'parameter_configurations';
+
     protected $fillable = [
         'user_id',
-        'ambientTemp',      
+        'batch',
+        'ambientTemp',
         'ambientHum',
         'soilMoisture',
         'soilTemp',
-        'uvStart',          
-        'uvDuration',       
+        'uvStart',
+        'uvDuration',
         'ledStart',
         'ledDuration',
         'is_active',
     ];
 
     /**
-     * Ang $casts ay sinisiguro na ang data type ay tama 
+     * Ang $casts ay sinisiguro na ang data type ay tama
      * paglabas ng database (JSON response).
      */
     protected $casts = [

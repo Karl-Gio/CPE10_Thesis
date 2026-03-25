@@ -12,23 +12,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('parameters', function (Blueprint $table) {
-            // 1. Primary Key
             $table->id();
 
-            // 2. Identification (Inalis ang ->after() dahil bawal ito sa Schema::create)
+            // Batch / identification
             $table->string('Batch')->nullable();
 
-            // 3. Environmental Readings (Para sa Data Logging)
+            // Environmental readings
             $table->decimal('Ambient_Temperature', 8, 2)->nullable();
             $table->decimal('Relative_Humidity', 8, 2)->nullable();
             $table->decimal('Soil_Temperature', 8, 2)->nullable();
             $table->decimal('Soil_Moisture', 8, 2)->nullable();
-            $table->decimal('Light_Intensity', 8, 2)->nullable();
-            
-            // 4. AI Prediction Results
+            $table->decimal('Light_Intensity', 10, 2)->nullable();
+
+            // AI prediction
             $table->integer('Pechay_Count')->default(0);
 
-            // 5. Timestamps (Created at / Updated at)
             $table->timestamps();
         });
     }

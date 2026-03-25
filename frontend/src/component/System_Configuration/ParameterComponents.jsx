@@ -56,28 +56,65 @@ export function ParameterField({ label, value, onChange, unit }) {
   );
 }
 
-/* Grid of all parameter cards */
 export function ParameterGrid({ values, setField }) {
   return (
     <Row className="g-3">
+      {/* 0. Current Batch */}
+      <Col md={6} xl={4}>
+        <Card className="shadow-sm border-0 rounded-4 h-100 border-start border-success border-4">
+          <Card.Body className="p-3">
+            <div className="text-uppercase small text-success fw-bold mb-2">Current Batch</div>
+            <Form.Group>
+              <Form.Label className="small text-muted mb-0">Batch Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={values.batch}
+                onChange={(e) => setField("batch")(e.target.value)}
+                placeholder="e.g. Batch A"
+              />
+            </Form.Group>
+          </Card.Body>
+        </Card>
+      </Col>
+
       {/* 1. Ambient Temperature */}
       <Col md={6} xl={4}>
-        <ParameterField label="Ambient Temperature" value={values.ambientTemp} onChange={setField("ambientTemp")} unit="°C" />
+        <ParameterField
+          label="Ambient Temperature"
+          value={values.ambientTemp}
+          onChange={setField("ambientTemp")}
+          unit="°C"
+        />
       </Col>
 
       {/* 2. Ambient Humidity */}
       <Col md={6} xl={4}>
-        <ParameterField label="Ambient Humidity" value={values.ambientHum} onChange={setField("ambientHum")} unit="%" />
+        <ParameterField
+          label="Ambient Humidity"
+          value={values.ambientHum}
+          onChange={setField("ambientHum")}
+          unit="%"
+        />
       </Col>
 
       {/* 3. Soil Moisture */}
       <Col md={6} xl={4}>
-        <ParameterField label="Soil Moisture" value={values.soilMoisture} onChange={setField("soilMoisture")} unit="%" />
+        <ParameterField
+          label="Soil Moisture"
+          value={values.soilMoisture}
+          onChange={setField("soilMoisture")}
+          unit="%"
+        />
       </Col>
 
       {/* 4. Soil Temperature */}
       <Col md={6} xl={4}>
-        <ParameterField label="Soil Temperature" value={values.soilTemp} onChange={setField("soilTemp")} unit="°C" />
+        <ParameterField
+          label="Soil Temperature"
+          value={values.soilTemp}
+          onChange={setField("soilTemp")}
+          unit="°C"
+        />
       </Col>
 
       {/* 5. UV LIGHT CONFIGURATION */}
@@ -87,11 +124,19 @@ export function ParameterGrid({ values, setField }) {
             <div className="text-uppercase small text-primary fw-bold mb-2">UV Light Schedule</div>
             <Form.Group className="mb-2">
               <Form.Label className="small text-muted mb-0">Start Time</Form.Label>
-              <Form.Control type="time" value={values.uvStart} onChange={(e) => setField("uvStart")(e.target.value)} />
+              <Form.Control
+                type="time"
+                value={values.uvStart}
+                onChange={(e) => setField("uvStart")(e.target.value)}
+              />
             </Form.Group>
             <Form.Group>
               <Form.Label className="small text-muted mb-0">Duration (Minutes)</Form.Label>
-              <Form.Control type="number" value={values.uvDuration} onChange={(e) => setField("uvDuration")(e.target.value)} />
+              <Form.Control
+                type="number"
+                value={values.uvDuration}
+                onChange={(e) => setField("uvDuration")(e.target.value)}
+              />
             </Form.Group>
           </Card.Body>
         </Card>
@@ -104,11 +149,19 @@ export function ParameterGrid({ values, setField }) {
             <div className="text-uppercase small text-warning fw-bold mb-2">LED Light Schedule</div>
             <Form.Group className="mb-2">
               <Form.Label className="small text-muted mb-0">Start Time</Form.Label>
-              <Form.Control type="time" value={values.ledStart} onChange={(e) => setField("ledStart")(e.target.value)} />
+              <Form.Control
+                type="time"
+                value={values.ledStart}
+                onChange={(e) => setField("ledStart")(e.target.value)}
+              />
             </Form.Group>
             <Form.Group>
               <Form.Label className="small text-muted mb-0">Duration (Minutes)</Form.Label>
-              <Form.Control type="number" value={values.ledDuration} onChange={(e) => setField("ledDuration")(e.target.value)} />
+              <Form.Control
+                type="number"
+                value={values.ledDuration}
+                onChange={(e) => setField("ledDuration")(e.target.value)}
+              />
             </Form.Group>
           </Card.Body>
         </Card>

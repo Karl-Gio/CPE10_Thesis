@@ -11,26 +11,29 @@ return new class extends Migration
         Schema::create('parameter_configurations', function (Blueprint $table) {
             $table->id();
 
-            // 1. THE OWNER TAG
+            // Owner
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 
-            // 2. Sensor Thresholds (Decimal)
+            // Current batch
+            $table->string('batch')->default('Batch A');
+
+            // Sensor thresholds
             $table->decimal('ambientTemp', 8, 2)->nullable();
             $table->decimal('ambientHum', 8, 2)->nullable();
             $table->decimal('soilMoisture', 8, 2)->nullable();
             $table->decimal('soilTemp', 8, 2)->nullable();
-            
-            // 3. Lighting Schedules (Time and Duration)
-            // Ginagamit ang string/time para sa Start Time (e.g., "07:00")
-            // Ginagamit ang integer para sa Duration (e.g., 90 minutes)
+
+            // UV schedule
             $table->string('uvStart')->default('07:00');
             $table->integer('uvDuration')->default(90);
-            
+
+            // LED schedule
             $table->string('ledStart')->default('18:00');
             $table->integer('ledDuration')->default(360);
-            
-            // 4. Status and Timestamps
+
+            // Status
             $table->boolean('is_active')->default(true);
+
             $table->timestamps();
         });
     }

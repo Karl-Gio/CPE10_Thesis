@@ -9,14 +9,15 @@ import { ParameterHeader, ParameterGrid, ParameterNote } from "./ParameterCompon
 export default function ParametersPage() {
  const initialValues = useMemo(
     () => ({
+      batch: "Batch A",
       ambientTemp: 25.0,
       ambientHum: 70.0,
       soilMoisture: 35.0,
       soilTemp: 22.0,
-      uvStart: "07:00",    // Default: 7 AM
-      uvDuration: 90,      // Default: 90 mins (1.5 hrs)
-      ledStart: "18:00",   // Default: 6 PM
-      ledDuration: 360     // Default: 6 hrs
+      uvStart: "07:00",
+      uvDuration: 90,
+      ledStart: "18:00",
+      ledDuration: 360
     }),
     []
   );
@@ -50,64 +51,70 @@ export default function ParametersPage() {
   const setField = (key) => (val) => {
     setValues((prev) => ({
       ...prev,
-      [key]: (key.includes("Start")) ? val : (val === "" ? "" : Number(val)),
+      [key]: val, // Keep it as a string while typing
     }));
   };
 
   const onReset = () => setValues(initialValues);
 
   // --- 2. SAVE TO LARAVEL AND SEND TO PYTHON ---
-  const onSave = async () => {
-    const token = localStorage.getItem("token");
+const onSave = async () => {
+  const token = localStorage.getItem("token");
 
-    if (!token) {
-      alert("Session expired. Please login again.");
-      return;
+  if (!token) {
+    alert("Session expired. Please login again.");
+    return;
+  }
+
+  // --- STEP 0: SANITIZE DATA ---
+  const sanitizedValues = {
+  ...values,
+  batch: values.batch?.trim() || "Batch A",
+  ambientTemp: parseFloat(values.ambientTemp) || 0,
+  ambientHum: parseFloat(values.ambientHum) || 0,
+  soilMoisture: parseFloat(values.soilMoisture) || 0,
+  soilTemp: parseFloat(values.soilTemp) || 0,
+  uvDuration: parseInt(values.uvDuration) || 0,
+  ledDuration: parseInt(values.ledDuration) || 0,
+};
+
+  try {
+    // --- STEP 1: SAVE TO LARAVEL ---
+    console.log("Step 1: Saving to Laravel...");
+    await axios.post("http://localhost:8000/api/configurations", sanitizedValues, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log("✅ Step 1 Success: Database Updated");
+
+    // --- STEP 2: SEND TO PYTHON (FIXED URL) ---
+    console.log("Step 2: Sending to Python Control System...");
+    
+    const piResponse = await fetch("http://localhost:5000/api/update_params", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sanitizedValues)
+    });
+
+    if (piResponse.ok) {
+      const result = await piResponse.json();
+      console.log("✅ Step 2 Success: Arduino Notified", result);
+      alert(`✅ Success! Parameters saved.\nUV: ${result.uv === 1 ? 'ON' : 'OFF'}\nLED: ${result.led === 1 ? 'ON' : 'OFF'}`);
+    } else {
+      const errorData = await piResponse.json().catch(() => ({}));
+      console.warn("⚠️ Step 2 Failed:", errorData);
+      alert(`Database updated, but Python error: ${errorData.message || "Unknown error"}`);
     }
 
-    try {
-      // --- STEP 1: SAVE TO LARAVEL (Database Logging) ---
-      console.log("Step 1: Saving to Laravel...");
-      await axios.post("http://localhost:8000/api/configurations", values, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log("✅ Step 1 Success: Database Updated");
-
-      // --- STEP 2: SEND TO PYTHON (Hardware Control via Vite Proxy) ---
-      console.log("Step 2: Sending to Python Control System...");
-      
-      /**
-       * PANSININ: Ginagamit natin ang '/api_python' proxy shortcut.
-       * Ito ang mag-aayos ng CORS error mo dahil si Vite na ang 
-       * kakausap sa Flask para sa iyo.
-       */
-      const piResponse = await fetch("/api_python/api/update_params", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values)
-      });
-
-      if (piResponse.ok) {
-        console.log("✅ Step 2 Success: Arduino Notified");
-        alert("✅ Success: Parameters saved and Control System updated!");
-      } else {
-        console.warn("⚠️ Step 2 Failed: Python error");
-        alert("Database updated, but the Control System (Python) returned an error.");
-      }
-
-    } catch (error) {
-      console.error("❌ Catch Block Error:", error);
-      
-      // Iba-iba ang handling base sa kung saan nag-fail
-      if (error.response) {
-        // Error galing sa Laravel (401, 500, etc.)
-        alert(`Database Error: ${error.response.status} - ${error.response.data.message || 'Check Laravel Logs'}`);
-      } else {
-        // Network error (CORS or Server Offline)
-        alert("Network Error: Could not reach the servers. Ensure both Laravel and Python are running.");
-      }
+  } catch (error) {
+    console.error("❌ Catch Block Error:", error);
+    
+    if (error.response) {
+      alert(`Database Error: ${error.response.status} - ${error.response.data.message || 'Check Laravel Logs'}`);
+    } else {
+      alert("Network Error: Could not reach the servers. Is the Python Flask app running on port 5000?");
     }
-  };
+  }
+};
 
   if (loading) return (
     <div className="d-flex justify-content-center align-items-center" style={{ height: "100vh" }}>
