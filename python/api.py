@@ -32,12 +32,22 @@ ARDUINO_BAUD = 115200
 LARAVEL_API_URL = "http://127.0.0.1:8000/api/parameters"
 SAVE_INTERVAL_SECONDS = 60
 
+# Inference schedule:
+# wait 30 mins, run inference for 5 mins, repeat
+INFERENCE_INTERVAL = 1800   # 30 minutes
+INFERENCE_DURATION = 300    # 5 minutes
+
 # ============================================
 # GLOBAL VARS
 # ============================================
 camera_active = False
 is_processing = False
 view_mode = "normal"
+
+# scheduler state
+last_inference_end = time.time()
+inference_start_time = None
+manual_override = False   # if True, manual /toggle_inference controls processing
 
 current_params = {
     "batch": "Batch A",
@@ -72,7 +82,11 @@ latest_stats = {
     "is_processing": False,
     "view_mode": "normal",
     "confidenceScore": 0,
-    "last_saved_at": None
+    "last_saved_at": None,
+    "mode": "IDLE",                    # CAMERA_OFF | IDLE | RUNNING | MANUAL
+    "next_inference_in_sec": 0,
+    "remaining_inference_sec": 0,
+    "manual_override": False
 }
 
 output_frame = None
@@ -195,7 +209,6 @@ def save_to_laravel():
     try:
         payload = build_laravel_payload()
 
-        # Skip ONLY if ALL sensor values are zero
         all_zero = all([
             payload["Ambient_Temperature"] == 0,
             payload["Relative_Humidity"] == 0,
@@ -209,7 +222,6 @@ def save_to_laravel():
             print("Skipping save: ALL values are 0")
             return
 
-        # Skip if same as last saved
         if last_saved_payload == payload:
             print("Skipping save: no changes")
             return
@@ -263,7 +275,6 @@ def update_sensors():
             s_data = sensor.get_data()
 
             if s_data:
-                # print(f"DEBUG: Data from Arduino -> {s_data}")
                 with lock:
                     latest_stats["temp"] = s_data.get("temp", latest_stats["temp"])
                     latest_stats["hum"] = s_data.get("hum", latest_stats["hum"])
@@ -306,7 +317,14 @@ db_logger_thread.start()
 # CAMERA PROCESSING
 # ============================================
 def process_camera():
-    global output_frame, latest_stats, camera_active, view_mode, is_processing
+    global output_frame
+    global latest_stats
+    global camera_active
+    global view_mode
+    global is_processing
+    global last_inference_end
+    global inference_start_time
+    global manual_override
 
     cap = None
     frame_count = 0
@@ -315,15 +333,34 @@ def process_camera():
 
     while True:
         try:
+            # CAMERA OFF
             if not camera_active:
                 if cap is not None:
                     cap.release()
                     cap = None
-                    with lock:
-                        output_frame = np.zeros((H, W, 3), dtype=np.uint8)
+
+                is_processing = False
+                inference_start_time = None
+                frame_count = 0
+                last_annotated_frame = None
+                last_masked_frame = None
+
+                with lock:
+                    output_frame = np.zeros((H, W, 3), dtype=np.uint8)
+                    latest_stats["camera_active"] = False
+                    latest_stats["is_processing"] = False
+                    latest_stats["view_mode"] = view_mode
+                    latest_stats["pechay_detected"] = 0
+                    latest_stats["confidenceScore"] = 0
+                    latest_stats["mode"] = "CAMERA_OFF"
+                    latest_stats["next_inference_in_sec"] = INFERENCE_INTERVAL
+                    latest_stats["remaining_inference_sec"] = 0
+                    latest_stats["manual_override"] = manual_override
+
                 time.sleep(0.2)
                 continue
 
+            # OPEN CAMERA
             if cap is None:
                 cap = cv2.VideoCapture(0)
                 cap.set(3, W)
@@ -343,7 +380,33 @@ def process_camera():
 
             frame = cv2.flip(frame, 1)
             final_frame = frame.copy()
+            current_time = time.time()
 
+            # ============================================
+            # AUTO SCHEDULER
+            # ============================================
+            if not manual_override:
+                if not is_processing and (current_time - last_inference_end >= INFERENCE_INTERVAL):
+                    print("🟢 Starting scheduled inference for 5 minutes...")
+                    is_processing = True
+                    inference_start_time = current_time
+                    frame_count = 0
+                    last_annotated_frame = None
+                    last_masked_frame = None
+
+                if is_processing and inference_start_time is not None:
+                    if current_time - inference_start_time >= INFERENCE_DURATION:
+                        print("🔴 Stopping scheduled inference.")
+                        is_processing = False
+                        inference_start_time = None
+                        last_inference_end = current_time
+                        frame_count = 0
+                        last_annotated_frame = None
+                        last_masked_frame = None
+
+            # ============================================
+            # DETECTION
+            # ============================================
             if is_processing and model is not None:
                 frame_count += 1
 
@@ -362,8 +425,18 @@ def process_camera():
                     for result in results:
                         for box in result.boxes:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                            x1 = max(0, x1)
+                            y1 = max(0, y1)
+                            x2 = min(W, x2)
+                            y2 = min(H, y2)
+
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                            masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
+
+                            try:
+                                masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
+                            except Exception:
+                                pass
 
                     last_annotated_frame = annotated_frame
                     last_masked_frame = masked_frame
@@ -372,21 +445,45 @@ def process_camera():
                         latest_stats["pechay_detected"] = count
                         latest_stats["confidenceScore"] = current_conf
                 else:
-                    annotated_frame = last_annotated_frame
-                    masked_frame = last_masked_frame
+                    annotated_frame = last_annotated_frame if last_annotated_frame is not None else frame
+                    masked_frame = last_masked_frame if last_masked_frame is not None else np.zeros_like(frame)
 
                 final_frame = masked_frame if view_mode == "masked" else annotated_frame
+
             else:
                 frame_count = 0
-                with lock:
-                    latest_stats["pechay_detected"] = 0
-                    latest_stats["confidenceScore"] = 0
                 final_frame = frame
 
+            # ============================================
+            # STATUS UPDATE
+            # ============================================
             with lock:
                 latest_stats["is_processing"] = is_processing
                 latest_stats["camera_active"] = camera_active
                 latest_stats["view_mode"] = view_mode
+                latest_stats["manual_override"] = manual_override
+
+                if not camera_active:
+                    latest_stats["mode"] = "CAMERA_OFF"
+                    latest_stats["next_inference_in_sec"] = INFERENCE_INTERVAL
+                    latest_stats["remaining_inference_sec"] = 0
+                elif manual_override:
+                    latest_stats["mode"] = "MANUAL"
+                    latest_stats["next_inference_in_sec"] = 0
+                    latest_stats["remaining_inference_sec"] = 0
+                elif is_processing and inference_start_time is not None:
+                    latest_stats["mode"] = "RUNNING"
+                    latest_stats["remaining_inference_sec"] = max(
+                        0, int(INFERENCE_DURATION - (current_time - inference_start_time))
+                    )
+                    latest_stats["next_inference_in_sec"] = 0
+                else:
+                    latest_stats["mode"] = "IDLE"
+                    latest_stats["remaining_inference_sec"] = 0
+                    latest_stats["next_inference_in_sec"] = max(
+                        0, int(INFERENCE_INTERVAL - (current_time - last_inference_end))
+                    )
+
                 output_frame = final_frame.copy()
 
         except Exception as e:
@@ -441,16 +538,36 @@ def get_status():
 
 @app.route('/toggle_inference', methods=['POST'])
 def toggle_inference():
-    global is_processing
+    global is_processing, manual_override, inference_start_time, last_inference_end
+
+    # Manual button takes over from auto schedule
+    manual_override = True
     is_processing = not is_processing
-    return jsonify({"status": is_processing})
+
+    if is_processing:
+        inference_start_time = time.time()
+        print("🟢 Manual inference started.")
+    else:
+        inference_start_time = None
+        last_inference_end = time.time()
+        print("🔴 Manual inference stopped.")
+
+    return jsonify({
+        "status": is_processing,
+        "manual_override": manual_override
+    })
 
 @app.route('/toggle_camera', methods=['POST'])
 def toggle_camera():
-    global camera_active, is_processing
+    global camera_active, is_processing, inference_start_time, manual_override
+
     camera_active = not camera_active
+
     if not camera_active:
         is_processing = False
+        inference_start_time = None
+        manual_override = False
+
     return jsonify({"status": camera_active})
 
 @app.route('/api/update_params', methods=['POST'])
@@ -527,7 +644,6 @@ def resend_params():
         })
 
     except Exception as e:
-        # print(f"❌ /api/resend_params error: {e}")
         return jsonify({
             "status": "error",
             "message": str(e)
@@ -537,5 +653,4 @@ def resend_params():
 # MAIN
 # ============================================
 if __name__ == "__main__":
-    # print("🌐 Flask API starting...")
     app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
