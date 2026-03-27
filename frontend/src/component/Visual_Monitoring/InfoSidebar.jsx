@@ -55,7 +55,7 @@ export default function InfoSidebar({ data }) {
     <Card className="shadow-sm border-0 rounded-4 h-100">
       <Card.Body className="p-4">
         <div className="text-uppercase small text-muted fw-bold mb-3">
-          AI Analysis
+          Image Analysis
         </div>
 
         {/* --- COUNT CARD --- */}

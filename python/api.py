@@ -8,7 +8,7 @@ import requests
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from ultralytics import YOLO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date # <--- Idinagdag ang 'date'
 
 from sensorReadings.arduino_reader import ArduinoReader
 
@@ -26,16 +26,22 @@ DATASET_FOLDER = "CapturedImage"
 if not os.path.exists(DATASET_FOLDER):
     os.makedirs(DATASET_FOLDER)
 
-ARDUINO_PORT = '/dev/ttyACM0'
+ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 115200
 
 LARAVEL_API_URL = "http://127.0.0.1:8000/api/parameters"
-SAVE_INTERVAL_SECONDS = 60
 
-# Inference schedule:
-# wait 30 mins, run inference for 5 mins, repeat
+# Auto inference schedule
 INFERENCE_INTERVAL = 1800   # 30 minutes
 INFERENCE_DURATION = 300    # 5 minutes
+
+# ============================================
+# WATERMARK SETTINGS (CCTV STYLE)
+# ============================================
+# PALITAN ITO: Ilagay dito kung kailan kayo nag-start magtanim (Year, Month, Day)
+START_DATE = date(2026, 3, 27) 
+LOCATION_TEXT_1 = "Cabuyao City, Laguna"
+LOCATION_TEXT_2 = "Calabarzon"
 
 # ============================================
 # GLOBAL VARS
@@ -44,10 +50,10 @@ camera_active = False
 is_processing = False
 view_mode = "normal"
 
-# scheduler state
+# Scheduler state
 last_inference_end = time.time()
 inference_start_time = None
-manual_override = False   # if True, manual /toggle_inference controls processing
+manual_override = False
 
 current_params = {
     "batch": "Batch A",
@@ -83,7 +89,7 @@ latest_stats = {
     "view_mode": "normal",
     "confidenceScore": 0,
     "last_saved_at": None,
-    "mode": "IDLE",                    # CAMERA_OFF | IDLE | RUNNING | MANUAL
+    "mode": "IDLE",  # CAMERA_OFF | IDLE | RUNNING | MANUAL
     "next_inference_in_sec": 0,
     "remaining_inference_sec": 0,
     "manual_override": False
@@ -91,6 +97,8 @@ latest_stats = {
 
 output_frame = None
 lock = threading.Lock()
+
+max_detected = 0
 
 # ============================================
 # LOAD MODEL
@@ -129,12 +137,21 @@ def is_light_active(start_str, duration_mins, now=None):
         if now is None:
             now = datetime.now()
 
-        start_time = datetime.strptime(start_str, "%H:%M").time()
+        clean_start = str(start_str)[:5] 
+        start_time = datetime.strptime(clean_start, "%H:%M").time()
         start_dt = datetime.combine(now.date(), start_time)
         end_dt = start_dt + timedelta(minutes=int(duration_mins))
 
+        if now < start_dt:
+            start_yesterday = start_dt - timedelta(days=1)
+            end_yesterday = start_yesterday + timedelta(minutes=int(duration_mins))
+            if start_yesterday <= now <= end_yesterday:
+                return 1
+
         return 1 if start_dt <= now <= end_dt else 0
-    except Exception:
+        
+    except Exception as e:
+        print(f"⚠️ Error parsing light schedule: {e} | Value received: {start_str}")
         return 0
 
 def build_command(params, now=None):
@@ -169,7 +186,6 @@ def send_command_if_changed(force=False, reason=""):
         latest_stats["ledw"] = "ON" if led_on else "OFF"
 
     if not force and command == last_command_sent:
-        print(f"ℹ️ Command unchanged, not sending. Reason: {reason}")
         return False
 
     print("====================================")
@@ -198,7 +214,7 @@ def build_laravel_payload():
             "Soil_Temperature": safe_float(latest_stats.get("sTEMP", 0.0)),
             "Soil_Moisture": safe_float(latest_stats.get("sMOIST", 0.0)),
             "Light_Intensity": safe_float(latest_stats.get("lux", 0.0)),
-            "Pechay_Count": safe_int(latest_stats.get("pechay_detected", 0)),
+            "Pechay_Count": safe_int(max_detected),
             "Batch": current_params.get("batch", "Batch A")
         }
     return payload
@@ -220,11 +236,11 @@ def save_to_laravel():
 
         if all_zero:
             print("Skipping save: ALL values are 0")
-            return
+            return False
 
         if last_saved_payload == payload:
             print("Skipping save: no changes")
-            return
+            return False
 
         response = requests.post(
             LARAVEL_API_URL,
@@ -239,12 +255,15 @@ def save_to_laravel():
             with lock:
                 latest_stats["last_saved_at"] = last_saved_at
 
-            print("Saved to Laravel:", payload)
+            print("✅ Saved to Laravel:", payload)
+            return True
         else:
-            print(f"Laravel save failed: {response.status_code} {response.text}")
+            print(f"❌ Laravel save failed: {response.status_code} {response.text}")
+            return False
 
     except Exception as e:
-        print(f"Error saving to Laravel: {e}")
+        print(f"❌ Error saving to Laravel: {e}")
+        return False
 
 # ============================================
 # SCHEDULE MONITOR
@@ -257,7 +276,6 @@ def schedule_monitor():
                 send_command_if_changed(force=False, reason="schedule monitor")
         except Exception as e:
             print(f"⚠️ Schedule monitor error: {e}")
-
         time.sleep(5)
 
 schedule_thread = threading.Thread(target=schedule_monitor, daemon=True)
@@ -287,8 +305,7 @@ def update_sensors():
                     latest_stats["tempMode"] = s_data.get("tempMode", latest_stats["tempMode"])
                     latest_stats["humMode"] = s_data.get("humMode", latest_stats["humMode"])
             else:
-                print("⚠️ No data received from ArduinoReader thread.")
-
+                pass # Silent ignore para hindi spam sa console
         except Exception as e:
             print(f"⚠️ Sensor update error: {e}")
 
@@ -296,22 +313,6 @@ def update_sensors():
 
 sensor_t = threading.Thread(target=update_sensors, daemon=True)
 sensor_t.start()
-
-# ============================================
-# DATABASE LOGGER THREAD
-# ============================================
-def database_logger():
-    print(f"💾 Database Logger Started - saving every {SAVE_INTERVAL_SECONDS} seconds")
-    while True:
-        try:
-            save_to_laravel()
-        except Exception as e:
-            print(f"⚠️ Database logger error: {e}")
-
-        time.sleep(SAVE_INTERVAL_SECONDS)
-
-db_logger_thread = threading.Thread(target=database_logger, daemon=True)
-db_logger_thread.start()
 
 # ============================================
 # CAMERA PROCESSING
@@ -325,6 +326,7 @@ def process_camera():
     global last_inference_end
     global inference_start_time
     global manual_override
+    global max_detected
 
     cap = None
     frame_count = 0
@@ -338,6 +340,7 @@ def process_camera():
                 if cap is not None:
                     cap.release()
                     cap = None
+                    print("📷 Camera released.")
 
                 is_processing = False
                 inference_start_time = None
@@ -362,6 +365,7 @@ def process_camera():
 
             # OPEN CAMERA
             if cap is None:
+                print("🚀 Opening camera...")
                 cap = cv2.VideoCapture(0)
                 cap.set(3, W)
                 cap.set(4, H)
@@ -386,17 +390,22 @@ def process_camera():
             # AUTO SCHEDULER
             # ============================================
             if not manual_override:
-                if not is_processing and (current_time - last_inference_end >= INFERENCE_INTERVAL):
+                if (not is_processing) and ((current_time - last_inference_end) >= INFERENCE_INTERVAL):
                     print("🟢 Starting scheduled inference for 5 minutes...")
                     is_processing = True
                     inference_start_time = current_time
                     frame_count = 0
                     last_annotated_frame = None
                     last_masked_frame = None
+                    max_detected = 0
 
                 if is_processing and inference_start_time is not None:
-                    if current_time - inference_start_time >= INFERENCE_DURATION:
+                    if (current_time - inference_start_time) >= INFERENCE_DURATION:
                         print("🔴 Stopping scheduled inference.")
+                        print("💾 Saving data after inference cycle...")
+                        save_to_laravel()
+                        
+                        max_detected = 0
                         is_processing = False
                         inference_start_time = None
                         last_inference_end = current_time
@@ -411,11 +420,18 @@ def process_camera():
                 frame_count += 1
 
                 if frame_count % SKIP_FRAMES == 0 or last_annotated_frame is None:
-                    results = model.predict(frame, conf=CONFIDENCE_THRESHOLD, verbose=False, imgsz=320)
+                    results = model.predict(
+                        frame,
+                        conf=CONFIDENCE_THRESHOLD,
+                        verbose=False,
+                        imgsz=320
+                    )
+
                     count = len(results[0].boxes)
+                    max_detected = max(max_detected, count)
 
                     current_conf = (
-                        round((sum([box.conf.item() for box in results[0].boxes]) / count * 100), 1)
+                        round((sum(box.conf.item() for box in results[0].boxes) / count) * 100, 1)
                         if count > 0 else 0
                     )
 
@@ -425,11 +441,8 @@ def process_camera():
                     for result in results:
                         for box in result.boxes:
                             x1, y1, x2, y2 = map(int, box.xyxy[0])
-
-                            x1 = max(0, x1)
-                            y1 = max(0, y1)
-                            x2 = min(W, x2)
-                            y2 = min(H, y2)
+                            x1, y1 = max(0, x1), max(0, y1)
+                            x2, y2 = min(W, x2), min(H, y2)
 
                             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
@@ -453,6 +466,52 @@ def process_camera():
             else:
                 frame_count = 0
                 final_frame = frame
+
+          # ============================================
+            # NEW: WATERMARK LOGIC (CCTV Style)
+            # ============================================
+            if final_frame is not None:
+                now = datetime.now()
+                current_date_str = now.strftime("%m-%d-%Y")
+                current_time_str = now.strftime("%I:%M:%S %p")
+                
+                # Calculate "Day X"
+                current_date = now.date()
+                days_passed = (current_date - START_DATE).days
+                day_text = f"Day {max(0, days_passed)}"
+                
+                # BAGO: Ginamit ang FONT_HERSHEY_PLAIN para mas malapit sa digital style
+                font = cv2.FONT_HERSHEY_PLAIN
+                # Medyo nilakihan kasi mas maliit naturally ang PLAIN font
+                font_scale = 1.0  
+                color = (255, 255, 255) # White text
+                thickness = 1
+                shadow_color = (0, 0, 0) # Black shadow
+                
+                # POSISYON: Lower Left Corner
+                x_start = 50
+                y_start = H - 120 
+                # Binawasan ang spacing kasi mas condensed ang PLAIN font
+                line_spacing = 18 
+                
+                lines = [
+                    day_text,
+                    current_date_str,
+                    f"Time: {current_time_str}"
+                ]
+                
+                for i, line in enumerate(lines):
+                    y_pos = y_start + (i * line_spacing)
+                    
+                    # --- GUMAWA TAYO NG OUTLINE EFFECT ---
+                    # Para makuha yung itim na border sa paligid ng puting text
+                    cv2.putText(final_frame, line, (x_start + 1, y_pos), font, font_scale, shadow_color, thickness + 1)
+                    cv2.putText(final_frame, line, (x_start - 1, y_pos), font, font_scale, shadow_color, thickness + 1)
+                    cv2.putText(final_frame, line, (x_start, y_pos + 1), font, font_scale, shadow_color, thickness + 1)
+                    cv2.putText(final_frame, line, (x_start, y_pos - 1), font, font_scale, shadow_color, thickness + 1)
+                    
+                    # Draw Real Text (Puti sa gitna)
+                    cv2.putText(final_frame, line, (x_start, y_pos), font, font_scale, color, thickness)
 
             # ============================================
             # STATUS UPDATE
@@ -498,7 +557,7 @@ camera_thread.start()
 # ============================================
 # FLASK ROUTES
 # ============================================
-@app.route('/video_feed')
+@app.route("/video_feed")
 def video_feed():
     def generate():
         while True:
@@ -518,10 +577,10 @@ def video_feed():
                     continue
 
                 yield (
-                    b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' +
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" +
                     encoded_image.tobytes() +
-                    b'\r\n'
+                    b"\r\n"
                 )
 
             except Exception as e:
@@ -529,37 +588,60 @@ def video_feed():
 
             time.sleep(0.03)
 
-    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-@app.route('/status')
+
+@app.route("/status")
 def get_status():
     with lock:
         return jsonify(dict(latest_stats))
 
-@app.route('/toggle_inference', methods=['POST'])
-def toggle_inference():
-    global is_processing, manual_override, inference_start_time, last_inference_end
 
-    # Manual button takes over from auto schedule
+@app.route("/toggle_inference", methods=["POST"])
+def toggle_inference():
+    global is_processing, manual_override, inference_start_time, last_inference_end, max_detected
+
     manual_override = True
     is_processing = not is_processing
 
     if is_processing:
         inference_start_time = time.time()
-        print("🟢 Manual inference started.")
+        max_detected = 0
+        print("Manual inference started.")
     else:
+        print("🔴 Manual inference stopped.")
+        print("💾 Saving data after manual inference...")
+        save_to_laravel()
         inference_start_time = None
         last_inference_end = time.time()
-        print("🔴 Manual inference stopped.")
+        max_detected = 0
 
     return jsonify({
         "status": is_processing,
         "manual_override": manual_override
     })
 
-@app.route('/toggle_camera', methods=['POST'])
+
+@app.route("/set_auto_mode", methods=["POST"])
+def set_auto_mode():
+    global manual_override, is_processing, inference_start_time, last_inference_end, max_detected
+
+    manual_override = False
+    is_processing = False
+    inference_start_time = None
+    last_inference_end = time.time()
+    max_detected = 0
+
+    print("🔄 Returned to AUTO mode.")
+
+    return jsonify({
+        "status": "auto_mode_enabled",
+        "manual_override": manual_override
+    })
+
+@app.route("/toggle_camera", methods=["POST"])
 def toggle_camera():
-    global camera_active, is_processing, inference_start_time, manual_override
+    global camera_active, is_processing, inference_start_time, manual_override, max_detected
 
     camera_active = not camera_active
 
@@ -567,10 +649,35 @@ def toggle_camera():
         is_processing = False
         inference_start_time = None
         manual_override = False
+        max_detected = 0
 
     return jsonify({"status": camera_active})
 
-@app.route('/api/update_params', methods=['POST'])
+
+@app.route("/toggle_view", methods=["POST"])
+def toggle_view():
+    global view_mode
+    view_mode = "masked" if view_mode == "normal" else "normal"
+    return jsonify({"status": "success", "mode": view_mode})
+
+
+@app.route("/capture_image", methods=["POST"])
+def capture_image():
+    global output_frame
+
+    if output_frame is None:
+        return jsonify({"status": "error", "message": "No frame"}), 400
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = os.path.join(DATASET_FOLDER, f"img_{timestamp}.jpg")
+
+    with lock:
+        cv2.imwrite(filename, output_frame)
+
+    return jsonify({"status": "success", "file": filename})
+
+
+@app.route("/api/update_params", methods=["POST"])
 def update_params():
     global current_params, params_saved_once
 
@@ -578,15 +685,15 @@ def update_params():
         data = request.json if request.is_json else {}
 
         new_params = {
-            "batch": data.get('batch', "Batch A"),
-            "ambientTemp": safe_float(data.get('ambientTemp', 25.0), 25.0),
-            "ambientHum": safe_float(data.get('ambientHum', 70.0), 70.0),
-            "soilMoisture": safe_float(data.get('soilMoisture', 35.0), 35.0),
-            "soilTemp": safe_float(data.get('soilTemp', 22.0), 22.0),
-            "uvStart": data.get('uvStart', "07:00"),
-            "uvDuration": safe_int(data.get('uvDuration', 90), 90),
-            "ledStart": data.get('ledStart', "18:00"),
-            "ledDuration": safe_int(data.get('ledDuration', 360), 360)
+            "batch": data.get("batch", "Batch A"),
+            "ambientTemp": safe_float(data.get("ambientTemp", 25.0), 25.0),
+            "ambientHum": safe_float(data.get("ambientHum", 70.0), 70.0),
+            "soilMoisture": safe_float(data.get("soilMoisture", 35.0), 35.0),
+            "soilTemp": safe_float(data.get("soilTemp", 22.0), 22.0),
+            "uvStart": data.get("uvStart", "07:00"),
+            "uvDuration": safe_int(data.get("uvDuration", 90), 90),
+            "ledStart": data.get("ledStart", "18:00"),
+            "ledDuration": safe_int(data.get("ledDuration", 360), 360)
         }
 
         current_params = new_params
@@ -614,14 +721,16 @@ def update_params():
             "message": str(e)
         }), 500
 
-@app.route('/api/current_params', methods=['GET'])
+
+@app.route("/api/current_params", methods=["GET"])
 def get_current_params():
     return jsonify({
         "saved_once": params_saved_once,
         "params": current_params
     })
 
-@app.route('/api/resend_params', methods=['POST'])
+
+@app.route("/api/resend_params", methods=["POST"])
 def resend_params():
     try:
         if not params_saved_once:
@@ -653,4 +762,4 @@ def resend_params():
 # MAIN
 # ============================================
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

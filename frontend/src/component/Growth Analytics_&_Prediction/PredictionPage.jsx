@@ -1,4 +1,4 @@
-import React, { useState } from "react"; // Idinagdag natin ang useState
+import React, { useState } from "react";
 import Container from "react-bootstrap/Container";
 import Card from "react-bootstrap/Card";
 import Row from "react-bootstrap/Row";
@@ -11,15 +11,13 @@ import {
   PredictionBottomBar,
 } from "./PredictionComponents";
 
-// MOCK DATABASE: Dito muna tayo kukuha ng data habang wala pa yung API.
-// Pwede mo itong palitan ng totoong data from backend mo later.
 const mockDatabase = {
   "B-2025-001": {
     datePlanted: "2025-01-01",
     totalSeeds: 30,
     germinationCount: 26,
     deltaFromYesterday: "+2 from yesterday",
-    predictedHarvest: "Jan 06, 2026",
+    predictedGermination: "Jan 08, 2025", // Changed from harvest
     modelAccuracy: "95.4%",
   },
   "B-2025-002": {
@@ -27,7 +25,7 @@ const mockDatabase = {
     totalSeeds: 50,
     germinationCount: 42,
     deltaFromYesterday: "+5 from yesterday",
-    predictedHarvest: "Mar 10, 2026",
+    predictedGermination: "Feb 20, 2025", // Changed from harvest
     modelAccuracy: "91.2%",
   },
   "B-2025-003": {
@@ -35,16 +33,13 @@ const mockDatabase = {
     totalSeeds: 40,
     germinationCount: 15,
     deltaFromYesterday: "+15 from yesterday",
-    predictedHarvest: "Apr 05, 2026",
+    predictedGermination: "Mar 07, 2025", // Changed from harvest
     modelAccuracy: "88.9%",
   }
 };
 
 export default function PredictionPage() {
-  // STATE: Ito ang mag-tatrack kung anong Batch ang naka-select sa dropdown
   const [selectedBatch, setSelectedBatch] = useState("B-2025-001");
-
-  // Kukunin natin yung data mula sa mockDatabase base sa kung ano ang naka-select
   const data = mockDatabase[selectedBatch];
 
   return (
@@ -52,14 +47,13 @@ export default function PredictionPage() {
       <SideBar />
 
       <div className="flex-grow-1">
-        <DashboardHeader title="Growth Analytics & Prediction" />
+        <DashboardHeader title="Germination Analytics & Prediction" />
 
         <Container fluid className="py-4" style={{ maxWidth: "1200px" }}>
           <Card className="shadow-sm border-0 rounded-4">
             <Card.Body className="p-4">
-              <h3 className="fw-bold mb-4">Yield Prediction Analytics</h3>
+              <h3 className="fw-bold mb-4">Germination Prediction Analytics</h3>
 
-              {/* Ipinasa natin ang selectedBatch at ang function para mabago ito (setSelectedBatch) */}
               <PredictionMeta 
                 batchId={selectedBatch} 
                 datePlanted={data.datePlanted} 
@@ -72,7 +66,7 @@ export default function PredictionPage() {
                 </Col>
                 <Col md={6}>
                   <PredictionStatCard
-                    title="Germination Count"
+                    title="Current Germination"
                     value={data.germinationCount}
                     subText={data.deltaFromYesterday}
                   />
@@ -81,15 +75,16 @@ export default function PredictionPage() {
 
               <Row className="g-4">
                 <Col md={6}>
+                  {/* Changed Label to Predicted Germination */}
                   <PredictionBottomBar
-                    leftLabel="Predicted Harvest"
-                    rightValue={data.predictedHarvest}
+                    leftLabel="Predicted Germination"
+                    rightValue={data.predictedGermination}
                     variant="dark"
                   />
                 </Col>
                 <Col md={6}>
                   <PredictionBottomBar
-                    leftLabel="Model Accuracy"
+                    leftLabel="Prediction Accuracy"
                     rightValue={data.modelAccuracy}
                     variant="green"
                   />
