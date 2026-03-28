@@ -58,69 +58,69 @@ export default function ParametersPage() {
   const onReset = () => setValues(initialValues);
 
   // --- 2. SAVE TO LARAVEL AND SEND TO PYTHON ---
-const onSave = async () => {
-  const token = localStorage.getItem("token");
-  if (!token) { alert("Session expired."); return; }
+  const onSave = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) { alert("Session expired."); return; }
 
-  // 1. Sanitize Data
-  const sanitizedValues = {
-    ...values,
-    batch: values.batch?.trim() || "Batch A",
-    ambientTemp: parseFloat(values.ambientTemp) || 0,
-    ambientHum: parseFloat(values.ambientHum) || 0,
-    soilMoisture: parseFloat(values.soilMoisture) || 0,
-    soilTemp: parseFloat(values.soilTemp) || 0,
-    uvDuration: parseInt(values.uvDuration) || 0,
-    ledDuration: parseInt(values.ledDuration) || 0,
-  };
+    // 1. Sanitize Data
+    const sanitizedValues = {
+      ...values,
+      batch: values.batch?.trim() || "Batch A",
+      ambientTemp: parseFloat(values.ambientTemp) || 0,
+      ambientHum: parseFloat(values.ambientHum) || 0,
+      soilMoisture: parseFloat(values.soilMoisture) || 0,
+      soilTemp: parseFloat(values.soilTemp) || 0,
+      uvDuration: parseInt(values.uvDuration) || 0,
+      ledDuration: parseInt(values.ledDuration) || 0,
+    };
 
-  try {
-    // --- STEP 1: ENSURE BATCH EXISTS ---
-    console.log("Checking if Batch exists...");
     try {
-      await axios.get(`http://localhost:8000/api/batches/${sanitizedValues.batch}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log("✅ Batch already exists.");
-    } catch (err) {
-      if (err.response && err.response.status === 404) {
-        console.log("Creating new batch entry...");
-        // Since Batch store requires date and predicted days, we provide defaults:
-        await axios.post("http://localhost:8000/api/batches", {
-          batch_id: sanitizedValues.batch,
-          date_planted: new Date().toISOString().split('T')[0], // Today
-          predicted_days: 7 // Default prediction for Pechay
-        }, {
+      // --- STEP 1: ENSURE BATCH EXISTS ---
+      console.log("Checking if Batch exists...");
+      try {
+        await axios.get(`http://localhost:8000/api/batches/${sanitizedValues.batch}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        console.log("✅ New Batch Created.");
+        console.log("✅ Batch already exists.");
+      } catch (err) {
+        if (err.response && err.response.status === 404) {
+          console.log("Creating new batch entry...");
+          // Since Batch store requires date and predicted days, we provide defaults:
+          await axios.post("http://localhost:8000/api/batches", {
+            batch_id: sanitizedValues.batch,
+            date_planted: new Date().toISOString().split('T')[0], // Today
+            predicted_days: 7 // Default prediction for Pechay
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log("✅ New Batch Created.");
+        }
       }
+
+      // --- STEP 2: SAVE CONFIG TO LARAVEL ---
+      await axios.post("http://localhost:8000/api/configurations", sanitizedValues, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log("✅ Parameters saved to DB.");
+
+      // --- STEP 3: SEND TO PYTHON CONTROL SYSTEM ---
+      const piResponse = await fetch("http://localhost:5000/api/update_params", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sanitizedValues)
+      });
+
+      if (piResponse.ok) {
+        alert(`✅ Success! Batch ${sanitizedValues.batch} is now active.`);
+      } else {
+        alert("Database updated, but hardware control system is offline.");
+      }
+
+    } catch (error) {
+      console.error("❌ Save Error:", error);
+      alert("Failed to sync systems. Check console for details.");
     }
-
-    // --- STEP 2: SAVE CONFIG TO LARAVEL ---
-    await axios.post("http://localhost:8000/api/configurations", sanitizedValues, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    console.log("✅ Parameters saved to DB.");
-
-    // --- STEP 3: SEND TO PYTHON CONTROL SYSTEM ---
-    const piResponse = await fetch("http://localhost:5000/api/update_params", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sanitizedValues)
-    });
-
-    if (piResponse.ok) {
-      alert(`✅ Success! Batch ${sanitizedValues.batch} is now active.`);
-    } else {
-      alert("Database updated, but hardware control system is offline.");
-    }
-
-  } catch (error) {
-    console.error("❌ Save Error:", error);
-    alert("Failed to sync systems. Check console for details.");
-  }
-};
+  };
 
   if (loading) return (
     <div className="d-flex justify-content-center align-items-center" style={{ height: "100vh" }}>

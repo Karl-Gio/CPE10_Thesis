@@ -8,7 +8,7 @@ import requests
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from ultralytics import YOLO
-from datetime import datetime, timedelta, date # <--- Idinagdag ang 'date'
+from datetime import datetime, timedelta, date 
 
 from sensorReadings.arduino_reader import ArduinoReader
 
@@ -319,6 +319,34 @@ def save_to_laravel():
     except Exception as e:
         print(f"❌ Error saving to Laravel: {e}")
         return False
+    
+def sync_params_from_laravel():
+    global current_params, params_saved_once
+    print("🔄 Syncing parameters from Laravel database...")
+    try:
+        # Use your Laravel endpoint for the active config
+        response = requests.get("http://127.0.0.1:8000/api/configurations/active", timeout=5)
+        if response.ok:
+            data = response.json()
+            # Map Laravel/React keys to Python keys
+            current_params.update({
+                "batch": data.get("batch", "Batch A"),
+                "ambientTemp": safe_float(data.get("ambientTemp")),
+                "ambientHum": safe_float(data.get("ambientHum")),
+                "soilMoisture": safe_float(data.get("soilMoisture")),
+                "soilTemp": safe_float(data.get("soilTemp")),
+                "uvStart24": data.get("uvStart"),      # Mapped from 'uvStart'
+                "uvDurationMinutes": data.get("uvDuration"), # Mapped from 'uvDuration'
+                "ledStart24": data.get("ledStart"),
+                "ledEnd24": data.get("ledEnd", "06:00") # Ensure end time exists
+            })
+            params_saved_once = True
+            print("✅ Parameters successfully synced from Laravel.")
+            send_command_if_changed(force=True, reason="initial sync")
+        else:
+            print("⚠️ Could not find active config in Laravel. Using defaults.")
+    except Exception as e:
+        print(f"❌ Error syncing from Laravel: {e}")
 
 # ============================================
 # SCHEDULE MONITOR
@@ -737,69 +765,69 @@ def update_params():
     global current_params, params_saved_once
 
     try:
+        # Get data from React (sanitizedValues)
         data = request.json if request.is_json else {}
 
-        total_seeds = safe_int(data.get("totalSeeds", 30), 30)
-        program_days = safe_int(data.get("programDays", 7), 7)
-        uv_duration = safe_int(data.get("uvDurationMinutes", 120), 120)
+        # 1. Map React keys to variables
+        batch_name = data.get("batch", "Batch A")
+        
+        # Numbers
+        amb_temp = safe_float(data.get("ambientTemp"), 25.0)
+        amb_hum  = safe_float(data.get("ambientHum"), 70.0)
+        s_moist  = safe_float(data.get("soilMoisture"), 35.0)
+        s_temp   = safe_float(data.get("soilTemp"), 22.0)
+        
+        # Time and Durations
+        uv_start = data.get("uvStart", "07:00")
+        uv_dur   = safe_int(data.get("uvDuration"), 120)
+        
+        led_start = data.get("ledStart", "17:00")
+        led_dur   = safe_int(data.get("ledDuration"), 360) # Minutes
 
-        if total_seeds < 1 or total_seeds > 30:
-            return jsonify({
-                "status": "error",
-                "message": "Total seeds must be between 1 and 30."
-            }), 400
+        # 2. Logic: Calculate LED End Time
+        # React sends 'ledDuration' in minutes. We turn it into an 'HH:MM' end string.
+        try:
+            start_dt = datetime.strptime(led_start, "%H:%M")
+            end_dt = start_dt + timedelta(minutes=led_dur)
+            led_end_str = end_dt.strftime("%H:%M")
+        except Exception:
+            led_end_str = "23:59" # Fallback
 
-        if program_days < 1 or program_days > 7:
-            return jsonify({
-                "status": "error",
-                "message": "Program days must be between 1 and 7."
-            }), 400
+        # 3. Validation
+        if uv_dur < 1 or uv_dur > 720:
+            return jsonify({"status": "error", "message": "UV duration must be 1-720 mins."}), 400
 
-        if uv_duration < 1 or uv_duration > 720:
-            return jsonify({
-                "status": "error",
-                "message": "UV duration must be between 1 and 720 minutes."
-            }), 400
+        # 4. Update the global dictionary to match your existing logic
+        current_params.update({
+            "batch": batch_name,
+            "ambientTemp": amb_temp,
+            "ambientHum": amb_hum,
+            "soilMoisture": s_moist,
+            "soilTemp": s_temp,
+            "uvStart24": uv_start,
+            "uvDurationMinutes": uv_dur,
+            "ledStart24": led_start,
+            "ledEnd24": led_end_str, # Calculated for the Arduino command
+            "ledDuration": led_dur    # Stored for UI reference
+        })
 
-        new_params = {
-            "batch": data.get("batch", "Batch A"),
-            "datePlanted": data.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
-            "totalSeeds": total_seeds,
-            "programDays": program_days,
-
-            "ambientTemp": safe_float(data.get("ambientTemp", 25.0), 25.0),
-            "ambientHum": safe_float(data.get("ambientHum", 70.0), 70.0),
-            "soilMoisture": safe_float(data.get("soilMoisture", 35.0), 35.0),
-            "soilTemp": safe_float(data.get("soilTemp", 22.0), 22.0),
-
-            "uvStart24": data.get("uvStart24", "07:00"),
-            "uvDurationMinutes": uv_duration,
-
-            "ledStart24": data.get("ledStart24", "17:00"),
-            "ledEnd24": data.get("ledEnd24", "06:00"),
-        }
-
-        current_params = new_params
         params_saved_once = True
 
-        sent = send_command_if_changed(force=True, reason="user saved parameters")
+        # 5. Trigger Hardware Sync
+        # This sends the new <temp,hum,moist,temp,uv,led> command to Arduino
+        sent = send_command_if_changed(force=True, reason="React UI Parameters Update")
 
         now = datetime.now()
         command, uv_on, led_on = build_command(current_params, now)
 
         return jsonify({
             "status": "success",
-            "message": "Parameters saved and processed",
+            "message": f"Parameters for {batch_name} updated!",
             "command": command,
             "uv": uv_on,
             "led": led_on,
             "sent_to_arduino": sent,
-            "activeProgram": is_within_program_window(
-                current_params["datePlanted"],
-                current_params["programDays"],
-                now
-            ),
-            "params": current_params
+            "params": current_params # Send back to React to confirm
         })
 
     except Exception as e:
@@ -860,4 +888,5 @@ def resend_params():
 # MAIN
 # ============================================
 if __name__ == "__main__":
+    sync_params_from_laravel() 
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)
