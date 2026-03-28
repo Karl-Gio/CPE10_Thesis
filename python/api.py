@@ -57,14 +57,20 @@ manual_override = False
 
 current_params = {
     "batch": "Batch A",
+    "datePlanted": datetime.now().strftime("%Y-%m-%d"),
+    "totalSeeds": 30,
+    "programDays": 7,
+
     "ambientTemp": 25.0,
     "ambientHum": 70.0,
     "soilMoisture": 35.0,
     "soilTemp": 22.0,
-    "uvStart": "07:00",
-    "uvDuration": 90,
-    "ledStart": "18:00",
-    "ledDuration": 360
+
+    "uvStart24": "07:00",
+    "uvDurationMinutes": 120,
+
+    "ledStart24": "17:00",
+    "ledEnd24": "06:00"
 }
 
 params_saved_once = False
@@ -132,34 +138,83 @@ def safe_int(value, default=0):
     except Exception:
         return default
 
-def is_light_active(start_str, duration_mins, now=None):
+def is_within_program_window(date_planted_str, program_days, now=None):
     try:
         if now is None:
             now = datetime.now()
 
-        clean_start = str(start_str)[:5] 
-        start_time = datetime.strptime(clean_start, "%H:%M").time()
+        planted_date = datetime.strptime(date_planted_str, "%Y-%m-%d").date()
+        end_date = planted_date + timedelta(days=int(program_days))
+
+        return planted_date <= now.date() < end_date
+    except Exception as e:
+        print(f"⚠️ Program window error: {e}")
+        return False
+
+
+def is_led_active(start_str, end_str, now=None):
+    try:
+        if now is None:
+            now = datetime.now()
+
+        start_time = datetime.strptime(str(start_str)[:5], "%H:%M").time()
+        end_time = datetime.strptime(str(end_str)[:5], "%H:%M").time()
+
+        start_dt = datetime.combine(now.date(), start_time)
+        end_dt = datetime.combine(now.date(), end_time)
+
+        if end_dt <= start_dt:
+            end_dt += timedelta(days=1)
+            if now < start_dt:
+                now = now + timedelta(days=1)
+
+        return 1 if start_dt <= now <= end_dt else 0
+
+    except Exception as e:
+        print(f"⚠️ LED schedule error: {e} | start={start_str} end={end_str}")
+        return 0
+
+
+def is_uv_active(start_str, duration_mins, now=None):
+    try:
+        if now is None:
+            now = datetime.now()
+
+        start_time = datetime.strptime(str(start_str)[:5], "%H:%M").time()
         start_dt = datetime.combine(now.date(), start_time)
         end_dt = start_dt + timedelta(minutes=int(duration_mins))
 
-        if now < start_dt:
-            start_yesterday = start_dt - timedelta(days=1)
-            end_yesterday = start_yesterday + timedelta(minutes=int(duration_mins))
-            if start_yesterday <= now <= end_yesterday:
-                return 1
-
         return 1 if start_dt <= now <= end_dt else 0
-        
+
     except Exception as e:
-        print(f"⚠️ Error parsing light schedule: {e} | Value received: {start_str}")
+        print(f"⚠️ UV schedule error: {e} | start={start_str} duration={duration_mins}")
         return 0
+
 
 def build_command(params, now=None):
     if now is None:
         now = datetime.now()
 
-    uv_on = is_light_active(params["uvStart"], params["uvDuration"], now)
-    led_on = is_light_active(params["ledStart"], params["ledDuration"], now)
+    active_program = is_within_program_window(
+        params.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
+        params.get("programDays", 7),
+        now
+    )
+
+    if not active_program:
+        uv_on = 0
+        led_on = 0
+    else:
+        uv_on = is_uv_active(
+            params.get("uvStart24", "07:00"),
+            params.get("uvDurationMinutes", 120),
+            now
+        )
+        led_on = is_led_active(
+            params.get("ledStart24", "17:00"),
+            params.get("ledEnd24", "06:00"),
+            now
+        )
 
     command = (
         f"<{params['ambientTemp']},"
@@ -684,16 +739,44 @@ def update_params():
     try:
         data = request.json if request.is_json else {}
 
+        total_seeds = safe_int(data.get("totalSeeds", 30), 30)
+        program_days = safe_int(data.get("programDays", 7), 7)
+        uv_duration = safe_int(data.get("uvDurationMinutes", 120), 120)
+
+        if total_seeds < 1 or total_seeds > 30:
+            return jsonify({
+                "status": "error",
+                "message": "Total seeds must be between 1 and 30."
+            }), 400
+
+        if program_days < 1 or program_days > 7:
+            return jsonify({
+                "status": "error",
+                "message": "Program days must be between 1 and 7."
+            }), 400
+
+        if uv_duration < 1 or uv_duration > 720:
+            return jsonify({
+                "status": "error",
+                "message": "UV duration must be between 1 and 720 minutes."
+            }), 400
+
         new_params = {
             "batch": data.get("batch", "Batch A"),
+            "datePlanted": data.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
+            "totalSeeds": total_seeds,
+            "programDays": program_days,
+
             "ambientTemp": safe_float(data.get("ambientTemp", 25.0), 25.0),
             "ambientHum": safe_float(data.get("ambientHum", 70.0), 70.0),
             "soilMoisture": safe_float(data.get("soilMoisture", 35.0), 35.0),
             "soilTemp": safe_float(data.get("soilTemp", 22.0), 22.0),
-            "uvStart": data.get("uvStart", "07:00"),
-            "uvDuration": safe_int(data.get("uvDuration", 90), 90),
-            "ledStart": data.get("ledStart", "18:00"),
-            "ledDuration": safe_int(data.get("ledDuration", 360), 360)
+
+            "uvStart24": data.get("uvStart24", "07:00"),
+            "uvDurationMinutes": uv_duration,
+
+            "ledStart24": data.get("ledStart24", "17:00"),
+            "ledEnd24": data.get("ledEnd24", "06:00"),
         }
 
         current_params = new_params
@@ -711,6 +794,11 @@ def update_params():
             "uv": uv_on,
             "led": led_on,
             "sent_to_arduino": sent,
+            "activeProgram": is_within_program_window(
+                current_params["datePlanted"],
+                current_params["programDays"],
+                now
+            ),
             "params": current_params
         })
 
@@ -721,12 +809,22 @@ def update_params():
             "message": str(e)
         }), 500
 
-
 @app.route("/api/current_params", methods=["GET"])
 def get_current_params():
+    now = datetime.now()
+    command, uv_on, led_on = build_command(current_params, now)
+
     return jsonify({
         "saved_once": params_saved_once,
-        "params": current_params
+        "params": current_params,
+        "uv": uv_on,
+        "led": led_on,
+        "activeProgram": is_within_program_window(
+            current_params.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
+            current_params.get("programDays", 7),
+            now
+        ),
+        "command": command
     })
 
 

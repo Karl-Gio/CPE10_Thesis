@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ParameterController;
+use App\Http\Controllers\Api\BatchController;
 
 // ==========================================
 // PUBLIC ROUTES (No login needed)
@@ -37,3 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // POST: Save the new settings from React
     Route::post('/configurations', [ParameterController::class, 'storeConfig']);
 });
+
+Route::get('/batches', [BatchController::class, 'index']);
+Route::get('/batches/{batch_id}', [BatchController::class, 'show']);
+
+Route::post('/batches', [BatchController::class, 'store']); 
+Route::patch('/batches/{batch_id}', [BatchController::class, 'update']);

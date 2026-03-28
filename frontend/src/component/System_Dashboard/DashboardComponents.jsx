@@ -74,7 +74,7 @@ export function MetricGrid() {
     { title: "Light Intensity", value: `${(liveData.lux || 0).toFixed(0)} lx`, badgeText: null, subLeft: "", icon: "☀️" },
     { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, badgeText: "Optimal", subLeft: "", icon: "🏜️" },
     { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, badgeText: liveData.sMOIST < 20 ? "Dry" : "Optimal", subLeft: "", icon: "🌱" },
-    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "AI Live", subLeft: "YOLOv8 Detect", icon: "🥬" },
+    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "AI Live", subLeft: "YOLOv8", icon: "🥬" },
   ];
 
   return (
