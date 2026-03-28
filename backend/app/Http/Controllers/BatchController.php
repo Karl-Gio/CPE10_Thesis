@@ -24,7 +24,7 @@ class BatchController extends Controller
         $validated = $request->validate([
             'batch_id'       => 'required|unique:batches',
             'date_planted'   => 'required|date',
-            'predicted_days' => 'required|integer',
+            'predicted_days' => 'required|numeric',
         ]);
 
         $batch = Batch::create($validated);

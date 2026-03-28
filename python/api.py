@@ -4,6 +4,8 @@ import threading
 import os
 import numpy as np
 import requests
+import joblib
+import pandas as pd
 
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
@@ -116,6 +118,24 @@ try:
 except Exception as e:
     print(f"❌ Error loading YOLO model: {e}")
     model = None
+
+# ============================================
+# LOAD RANDOM FOREST MODEL
+# ============================================
+print("🧠 Loading Random Forest Model...")
+try:
+    ml_model = joblib.load('germination_model.pkl')
+    print("✅ ML Model Loaded!")
+except Exception as e:
+    print(f"❌ Error loading ML model: {e}")
+    ml_model = None
+
+# Define the features exactly as they were in training
+ML_FEATURES = [
+    'Ambient Temperature', 'Ambient Humidity', 
+    'Soil Temperature', 'Soil Moisture', 
+    'Light Duration', 'Pechay Count'
+]
 
 # ============================================
 # SENSOR INITIALIZATION
@@ -324,29 +344,62 @@ def sync_params_from_laravel():
     global current_params, params_saved_once
     print("🔄 Syncing parameters from Laravel database...")
     try:
-        # Use your Laravel endpoint for the active config
         response = requests.get("http://127.0.0.1:8000/api/configurations/active", timeout=5)
         if response.ok:
             data = response.json()
-            # Map Laravel/React keys to Python keys
+            
+            # Get the raw values
+            led_start = data.get("ledStart", "17:00")
+            led_dur = safe_int(data.get("ledDuration", 360))
+
+            # Logic: Calculate LED End Time so is_led_active() works correctly
+            try:
+                start_dt = datetime.strptime(led_start, "%H:%M")
+                end_dt = start_dt + timedelta(minutes=led_dur)
+                led_end_str = end_dt.strftime("%H:%M")
+            except:
+                led_end_str = "06:00"
+
             current_params.update({
                 "batch": data.get("batch", "Batch A"),
+                "datePlanted": data.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
                 "ambientTemp": safe_float(data.get("ambientTemp")),
                 "ambientHum": safe_float(data.get("ambientHum")),
                 "soilMoisture": safe_float(data.get("soilMoisture")),
                 "soilTemp": safe_float(data.get("soilTemp")),
-                "uvStart24": data.get("uvStart"),      # Mapped from 'uvStart'
-                "uvDurationMinutes": data.get("uvDuration"), # Mapped from 'uvDuration'
-                "ledStart24": data.get("ledStart"),
-                "ledEnd24": data.get("ledEnd", "06:00") # Ensure end time exists
+                "uvStart24": data.get("uvStart", "07:00"),      
+                "uvDurationMinutes": safe_int(data.get("uvDuration", 120)), 
+                "ledStart24": led_start,
+                "ledEnd24": led_end_str
             })
             params_saved_once = True
-            print("✅ Parameters successfully synced from Laravel.")
-            send_command_if_changed(force=True, reason="initial sync")
-        else:
-            print("⚠️ Could not find active config in Laravel. Using defaults.")
+            print(f"✅ Sync Complete: Now monitoring {current_params['batch']}")
+            send_command_if_changed(force=True, reason="initial sync")         
     except Exception as e:
         print(f"❌ Error syncing from Laravel: {e}")
+
+
+def train_and_get_prediction(data_dict):
+    if ml_model is None:
+        print("⚠️ Prediction failed: Model not loaded. Returning default.")
+        return 7.0
+
+    try:
+        # Prepare input data (Matching feature names and order)
+        input_df = pd.DataFrame([[
+            safe_float(data_dict.get('ambientTemp')),
+            safe_float(data_dict.get('ambientHum')),
+            safe_float(data_dict.get('soilTemp')),
+            safe_float(data_dict.get('soilMoisture')),
+            safe_float(data_dict.get('uvDuration')), # Using UV as light duration
+            25 # Default Pechay Count for initial prediction
+        ]], columns=ML_FEATURES)
+
+        prediction = ml_model.predict(input_df)[0]
+        return round(float(prediction), 2)
+    except Exception as e:
+        print(f"❌ Prediction error: {e}")
+        return 7.0
 
 # ============================================
 # SCHEDULE MONITOR
@@ -637,6 +690,8 @@ def process_camera():
 camera_thread = threading.Thread(target=process_camera, daemon=True)
 camera_thread.start()
 
+
+
 # ============================================
 # FLASK ROUTES
 # ============================================
@@ -883,6 +938,19 @@ def resend_params():
             "status": "error",
             "message": str(e)
         }), 500
+
+@app.route("/api/predict", methods=["POST"])
+def predict_germination():
+    try:
+        data = request.json
+        predicted_days = train_and_get_prediction(data)
+        
+        return jsonify({
+            "status": "success",
+            "predicted_days": predicted_days
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================
 # MAIN

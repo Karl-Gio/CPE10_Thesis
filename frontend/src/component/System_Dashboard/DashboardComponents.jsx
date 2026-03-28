@@ -69,12 +69,12 @@ export function MetricGrid() {
   }, []);
 
   const sensorMetrics = [
-    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, badgeText: liveData.temp > 32 ? "Warning" : "Optimal", subLeft: "", icon: "🌡️" },
-    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, badgeText: "Optimal", subLeft: "", icon: "💧" },
+    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, badgeText: liveData.temp > 32 ? "" : "", subLeft: "", icon: "🌡️" },
+    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, badgeText: "", subLeft: "", icon: "💧" },
     { title: "Light Intensity", value: `${(liveData.lux || 0).toFixed(0)} lx`, badgeText: null, subLeft: "", icon: "☀️" },
-    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, badgeText: "Optimal", subLeft: "", icon: "🏜️" },
-    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, badgeText: liveData.sMOIST < 20 ? "Dry" : "Optimal", subLeft: "", icon: "🌱" },
-    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "AI Live", subLeft: "YOLOv8", icon: "🥬" },
+    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, badgeText: "", subLeft: "", icon: "🏜️" },
+    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, badgeText: liveData.sMOIST < 20 ? "" : "", subLeft: "", icon: "🌱" },
+    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "Live", subLeft: "YOLOv8", icon: "🥬" },
   ];
 
   return (

@@ -3,16 +3,21 @@ import { Container, Card, Row, Col, Form, Table, Badge, Spinner, Alert } from "r
 import axios from "axios";
 import { SideBar, DashboardHeader } from "../Layout/LayoutComponents";
 
-/* ---------------- HELPERS (Keep these) ---------------- */
+/* ---------------- HELPERS ---------------- */
 function formatDate(dateString) {
   if (!dateString) return "—";
-  return new Date(dateString).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  return new Date(dateString).toLocaleDateString("en-US", { 
+    month: "short", 
+    day: "2-digit", 
+    year: "numeric" 
+  });
 }
 
 function addDays(date, days) {
   if (!date || days === undefined) return null;
   const result = new Date(date);
-  result.setDate(result.getDate() + days);
+  // Using parseFloat because ML predictions are often decimals
+  result.setDate(result.getDate() + Math.round(parseFloat(days)));
   return result;
 }
 
@@ -25,57 +30,62 @@ function calculateDiffInDays(date1, date2) {
 }
 
 export default function PredictionPage() {
-  const [batches, setBatches] = useState([]); // List for dropdown
+  const [batches, setBatches] = useState([]); 
   const [selectedBatchId, setSelectedBatchId] = useState(""); 
-  const [batchData, setBatchData] = useState(null); // Details of selected batch
+  const [batchData, setBatchData] = useState(null); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dbLatency, setDbLatency] = useState(0);
 
-  // 1. Fetch all batches on component mount
+  // 1. Fetch all batches
   useEffect(() => {
-    axios.get("http://localhost:8000/api/batches") // Change to your actual API URL
+    axios.get("http://localhost:8000/api/batches")
       .then(res => {
         setBatches(res.data);
-        if (res.data.length > 0) {
-          setSelectedBatchId(res.data[0].batch_id); // Set first batch as default
-        }
+        if (res.data.length > 0) setSelectedBatchId(res.data[0].batch_id);
         setLoading(false);
       })
-      .catch(err => {
+      .catch(() => {
         setError("Could not load batches.");
         setLoading(false);
       });
   }, []);
 
-  // 2. Fetch specific batch details when dropdown changes
+  // 2. Fetch details + Latency check
   useEffect(() => {
     if (!selectedBatchId) return;
+    const startTime = performance.now();
 
     axios.get(`http://localhost:8000/api/batches/${selectedBatchId}`)
       .then(res => {
+        const endTime = performance.now();
         setBatchData(res.data);
+        setDbLatency(Math.round(endTime - startTime));
       })
       .catch(err => console.error("Error fetching batch details", err));
   }, [selectedBatchId]);
 
-  // 3. Derived Calculations
+  // 3. Thesis Analytics: AI vs Reality
   const analytics = useMemo(() => {
     if (!batchData) return null;
 
-    const pDate = addDays(batchData.date_planted, batchData.predicted_days);
+    const pDays = parseFloat(batchData.predicted_days) || 0;
+    const pDate = addDays(batchData.date_planted, pDays);
     const actualDays = calculateDiffInDays(batchData.date_planted, batchData.actual_germination_date);
-    const variance = calculateDiffInDays(pDate, batchData.actual_germination_date);
+    
+    // Variance calculation: Positive means reality took longer than AI predicted
+    const variance = (actualDays && pDays) ? (actualDays - pDays).toFixed(2) : null;
 
     return {
       predictedDate: pDate,
       actualDays: actualDays,
       variance: variance,
-      status: batchData.actual_germination_date ? "Success" : "Pending"
+      isCompleted: !!batchData.actual_germination_date
     };
   }, [batchData]);
 
-  if (loading) return <div className="p-5 text-center"><Spinner animation="border" /></div>;
-  if (error) return <Alert variant="danger">{error}</Alert>;
+  if (loading) return <div className="p-5 text-center"><Spinner animation="border" variant="success" /></div>;
+  if (error) return <Alert variant="danger" className="m-4">{error}</Alert>;
 
   return (
     <div className="d-flex" style={{ background: "#f5f7fb", minHeight: "100vh" }}>
@@ -84,17 +94,23 @@ export default function PredictionPage() {
         <DashboardHeader title="Germination Analytics & Prediction" />
 
         <Container fluid className="py-4" style={{ maxWidth: "1200px" }}>
-          {batchData && (
+          {batchData && analytics && (
             <Card className="shadow-sm border-0 rounded-4">
               <Card.Body className="p-4">
-                <h3 className="fw-bold mb-4">Batch Germination Time Analysis</h3>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h3 className="fw-bold mb-0">Optimization Analysis</h3>
+                    <Badge bg="light" className="text-muted border fw-normal py-2 px-3">
+                        <i className="bi bi-cpu me-1"></i>
+                        Server Response: <span className="fw-bold text-dark">{dbLatency}ms</span>
+                    </Badge>
+                </div>
                 
-                {/* SELECTOR STRIP */}
+                {/* BATCH SELECTOR */}
                 <Card className="border-0 shadow-sm rounded-4 mb-4 bg-light">
-                  <Card.Body className="p-4">
-                    <Row className="g-4 align-items-center">
-                      <Col md={4}>
-                        <div className="text-uppercase small text-muted fw-bold mb-1">Select Batch ID</div>
+                  <Card.Body className="p-3">
+                    <Row className="g-3 align-items-center">
+                      <Col md={6}>
+                        <div className="text-uppercase small text-muted fw-bold mb-1">Active Batch</div>
                         <Form.Select
                           value={selectedBatchId}
                           onChange={(e) => setSelectedBatchId(e.target.value)}
@@ -105,87 +121,89 @@ export default function PredictionPage() {
                           ))}
                         </Form.Select>
                       </Col>
-                      <Col md={4}>
-                        <div className="text-uppercase small text-muted fw-bold mb-1">Date Planted</div>
-                        <div className="h5 fw-bold mb-0">{formatDate(batchData.date_planted)}</div>
+                      <Col md={6}>
+                        <div className="text-uppercase small text-muted fw-bold mb-1">Status</div>
+                        <Badge bg={analytics.isCompleted ? "success" : "warning"} className="px-3 py-2">
+                          {analytics.isCompleted ? "✅ GERMINATION VALIDATED" : "⏳ GROWTH IN PROGRESS"}
+                        </Badge>
                       </Col>
                     </Row>
                   </Card.Body>
                 </Card>
 
-                {/* STAT CARDS */}
+                {/* THESIS STAT CARDS */}
                 <Row className="g-4 mb-4">
-                  <Col md={4}>
-                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-4">
-                      <div className="text-muted fw-semibold small text-uppercase">Predicted Duration</div>
-                      <div className="display-6 fw-bold my-2 text-primary">{batchData.predicted_days} Days</div>
-                      <div className="small text-muted">Random Forest Estimate</div>
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-primary border-4">
+                      <div className="text-muted fw-semibold small text-uppercase">AI Prediction</div>
+                      <div className="h2 fw-bold my-2 text-primary">{batchData.predicted_days}d</div>
+                      <div className="small text-muted">Random Forest</div>
                     </Card>
                   </Col>
-                  <Col md={4}>
-                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-4">
-                      <div className="text-muted fw-semibold small text-uppercase">Predicted Date</div>
-                      <div className="display-6 fw-bold my-2" style={{color: '#6366f1'}}>{formatDate(analytics.predictedDate)}</div>
+                  
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-indigo border-4">
+                      <div className="text-muted fw-semibold small text-uppercase">Target Date</div>
+                      <div className="h4 fw-bold my-3 text-dark">{formatDate(analytics.predictedDate)}</div>
+                      <div className="small text-muted">Estimated Sprout</div>
                     </Card>
                   </Col>
-                  <Col md={4}>
-                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-4">
-                      <div className="text-muted fw-semibold small text-uppercase">Actual Duration</div>
-                      <div className="display-6 fw-bold my-2 text-success">{analytics.actualDays ? `${analytics.actualDays} Days` : "—"}</div>
+
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-success border-4">
+                      <div className="text-muted fw-semibold small text-uppercase">Actual Growth</div>
+                      <div className="h2 fw-bold my-2 text-success">
+                        {analytics.actualDays ? `${analytics.actualDays}d` : "---"}
+                      </div>
+                      <div className="small text-muted">YOLOv8 Validated</div>
+                    </Card>
+                  </Col>
+
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-danger border-4">
+                      <div className="text-muted fw-semibold small text-uppercase">Model Variance</div>
+                      <div className={`h2 fw-bold my-2 ${Math.abs(analytics.variance) < 1 ? 'text-success' : 'text-danger'}`}>
+                        {analytics.variance ? `${analytics.variance}d` : "N/A"}
+                      </div>
+                      <div className="small text-muted">Prediction Error</div>
                     </Card>
                   </Col>
                 </Row>
 
-                {/* VARIANCE BAR */}
-                <Row className="g-4 mb-5">
-                   <Col md={6}>
-                      <Card className="border-0 shadow-sm rounded-4 bg-dark text-white p-3">
-                          <div className="d-flex justify-content-between align-items-center">
-                              <span className="fw-bold text-uppercase small" style={{opacity: 0.75}}>Prediction Variance (Error)</span>
-                              <span className="h4 mb-0 fw-bold text-warning">
-                                {analytics.variance !== null ? `${analytics.variance} Day(s)` : "Calculating..."}
-                              </span>
-                          </div>
-                      </Card>
-                   </Col>
-                   <Col md={6}>
-                      <Card className="border-0 shadow-sm rounded-4 text-white p-3" style={{background: "#0a9b67"}}>
-                          <div className="d-flex justify-content-between align-items-center">
-                              <span className="fw-bold text-uppercase small">Status</span>
-                              <span className="h4 mb-0 fw-bold">{analytics.status}</span>
-                          </div>
-                      </Card>
-                   </Col>
-                </Row>
-
-                {/* DETAILS TABLE */}
-                <h5 className="fw-bold mb-3">Logs & Validation</h5>
+                {/* DETAILED LOG TABLE */}
+                <h5 className="fw-bold mb-3">Model Performance Metrics</h5>
                 <div className="table-responsive">
                   <Table hover className="align-middle bg-white rounded-3 overflow-hidden border">
-                    <thead className="table-light">
+                    <thead className="table-light text-uppercase small">
                       <tr>
-                        <th>Batch ID</th>
-                        <th>Predicted Date</th>
-                        <th>Actual Date</th>
-                        <th>Error</th>
-                        <th>Image Validation</th>
+                        <th>Batch Identification</th>
+                        <th>Planted</th>
+                        <th>ML Predicted Date</th>
+                        <th>Vision Actual Date</th>
+                        <th className="text-center">System Latency</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
                         <td className="fw-bold">{batchData.batch_id}</td>
-                        <td className="text-primary">{formatDate(analytics.predictedDate)}</td>
-                        <td className="text-success">{formatDate(batchData.actual_germination_date)}</td>
-                        <td>{analytics.variance ?? "—"}</td>
-                        <td>
-                          <Badge bg={batchData.actual_germination_date ? "success" : "secondary"}>
-                            {batchData.actual_germination_date ? "Validated by CV" : "Pending CV Detection"}
+                        <td>{formatDate(batchData.date_planted)}</td>
+                        <td className="text-primary fw-semibold">{formatDate(analytics.predictedDate)}</td>
+                        <td className="text-success fw-semibold">
+                          {batchData.actual_germination_date ? formatDate(batchData.actual_germination_date) : "Awaiting Detection..."}
+                        </td>
+                        <td className="text-center">
+                          <Badge bg={dbLatency < 200 ? "success-subtle" : "warning-subtle"} className="text-dark border">
+                            {dbLatency} ms
                           </Badge>
                         </td>
                       </tr>
                     </tbody>
                   </Table>
                 </div>
+
+                <Alert variant="info" className="mt-3 border-0 shadow-sm rounded-4 small">
+                  <strong>Thesis Insight:</strong> The model variance represents the delta between the <strong>Random Forest Regressor</strong> and <strong>YOLOv8 Computer Vision</strong> validation. Low variance (&lt; 1.0) indicates high environmental control efficiency.
+                </Alert>
               </Card.Body>
             </Card>
           )}

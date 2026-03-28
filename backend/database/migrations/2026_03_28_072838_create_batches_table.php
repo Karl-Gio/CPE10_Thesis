@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('batch_id')->unique(); // Halimbawa: B-2026-001
             $table->date('date_planted');
-            $table->integer('predicted_days'); // Ilang araw ang prediction ng AI
+            $table->double('predicted_days'); // Ilang araw ang prediction ng AI
             $table->date('actual_germination_date')->nullable(); // Nullable habang wala pang detection
             $table->timestamps();
         });
