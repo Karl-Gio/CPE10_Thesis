@@ -29,4 +29,9 @@ class Parameter extends Model
         'Light_Intensity'     => 'float',
         'Pechay_Count'        => 'integer',
     ];
+
+    public function batch()
+    {
+        return $this->belongsTo(Batch::class, 'batch_id', 'batch_id');
+    }
 }

@@ -12,4 +12,9 @@ class Batch extends Model
         'predicted_days', 
         'actual_germination_date'
     ];
+
+    public function parameters()
+    {
+        return $this->hasMany(Parameter::class, 'batch_id', 'batch_id');
+    }
 }
