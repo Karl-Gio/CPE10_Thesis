@@ -19,8 +19,8 @@ import { Line } from "react-chartjs-2";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-/* ---------------- Reusable Metric Card ---------------- */
-function MetricCard({ title, value, badgeText, subLeft, icon }) {
+//* ---------------- Reusable Metric Card (Updated) ---------------- */
+function MetricCard({ title, value, badgeText, subLeft, icon, extraValue, extraTitle }) {
   return (
     <Card className="shadow-sm h-100 border-0 rounded-4">
       <Card.Body>
@@ -30,7 +30,26 @@ function MetricCard({ title, value, badgeText, subLeft, icon }) {
             {icon}
           </div>
         </div>
-        <div className="fs-3 fw-bold">{value}</div>
+        
+        <div className="d-flex align-items-end gap-4">
+          {/* Main Value (Intensity) */}
+          <div>
+            <div className="fs-3 fw-bold">{value}</div>
+          </div>
+
+          {/* UV Duration (Visible only if extraValue is provided) */}
+          {extraValue !== undefined && (
+            <div className="border-start ps-3 pb-1">
+              <div className="text-uppercase text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
+                {extraTitle}
+              </div>
+              <div className="fw-bold text-primary" style={{ fontSize: '1.1rem' }}>
+                {extraValue} <span className="small fw-normal text-muted">mins</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="d-flex align-items-center gap-2 mt-2">
           {badgeText && (
             <Badge bg={badgeText === "Warning" || badgeText === "Dry" ? "danger" : "success"} className="bg-opacity-25 text-dark border">
@@ -44,16 +63,33 @@ function MetricCard({ title, value, badgeText, subLeft, icon }) {
   );
 }
 
-/* ---------------- Metric Grid (Dynamic) ---------------- */
+/* ----------------/* ---------------- Metric Grid (Dynamic) ---------------- */
 export function MetricGrid() {
   const [liveData, setLiveData] = useState({
     temp: 0, hum: 0, lux: 0, sMOIST: 0, sTEMP: 0, pechay_detected: 0
   });
+  
+  // State para sa UV Duration galing sa Config
+  const [uvDuration, setUvDuration] = useState(0);
 
   useEffect(() => {
+    // 1. Fetch Config once (o pwede ring i-interval kung nagbabago madalas)
+    const fetchConfig = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:8000/api/configurations/active", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data) setUvDuration(data.uvDuration || 0);
+      } catch (err) {
+        console.error("Config Fetch Error:", err);
+      }
+    };
+
+    // 2. Fetch Sensor Data (Interval)
     const fetchStats = async () => {
       try {
-        // GINAGAMIT ANG VITE PROXY
         const res = await fetch("/api_python/status");
         if (!res.ok) throw new Error("Network response was not ok");
         const data = await res.json();
@@ -63,24 +99,33 @@ export function MetricGrid() {
       }
     };
 
+    fetchConfig();
     fetchStats();
     const interval = setInterval(fetchStats, 2000); 
     return () => clearInterval(interval);
   }, []);
 
   const sensorMetrics = [
-    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, badgeText: liveData.temp > 32 ? "" : "", subLeft: "", icon: "🌡️" },
-    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, badgeText: "", subLeft: "", icon: "💧" },
-    { title: "Light Intensity", value: `${(liveData.lux || 0).toFixed(0)} lx`, badgeText: null, subLeft: "", icon: "☀️" },
-    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, badgeText: "", subLeft: "", icon: "🏜️" },
-    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, badgeText: liveData.sMOIST < 20 ? "" : "", subLeft: "", icon: "🌱" },
+    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, icon: "🌡️" },
+    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, icon: "💧" },
+    { 
+      title: "Light Intensity", 
+      value: `${(liveData.lux || 0).toFixed(0)} lx`, 
+      icon: "☀️",
+      extraTitle: "UV Duration",  // Label para sa UV
+      extraValue: uvDuration      // Ang value galing sa config
+    },
+    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, icon: "🏜️" },
+    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, icon: "🌱" },
     { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "Live", subLeft: "YOLOv8", icon: "🥬" },
   ];
 
   return (
     <Row className="g-3 mb-3">
       {sensorMetrics.map((metric, index) => (
-        <Col key={index} md={6} xl={4}><MetricCard {...metric} /></Col>
+        <Col key={index} md={6} xl={4}>
+          <MetricCard {...metric} />
+        </Col>
       ))}
     </Row>
   );

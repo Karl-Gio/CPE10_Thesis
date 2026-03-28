@@ -124,18 +124,15 @@ except Exception as e:
 # ============================================
 print("🧠 Loading Random Forest Model...")
 try:
-    ml_model = joblib.load('germination_model.pkl')
+    saved_ml = joblib.load("germination_model.pkl")
+    ml_model = saved_ml["model"]
+    ML_FEATURES = saved_ml["features"]
     print("✅ ML Model Loaded!")
+    print("📌 Features:", ML_FEATURES)
 except Exception as e:
     print(f"❌ Error loading ML model: {e}")
     ml_model = None
-
-# Define the features exactly as they were in training
-ML_FEATURES = [
-    'Ambient Temperature', 'Ambient Humidity', 
-    'Soil Temperature', 'Soil Moisture', 
-    'Light Duration', 'Pechay Count'
-]
+    ML_FEATURES = []
 
 # ============================================
 # SENSOR INITIALIZATION
@@ -385,18 +382,19 @@ def train_and_get_prediction(data_dict):
         return 7.0
 
     try:
-        # Prepare input data (Matching feature names and order)
-        input_df = pd.DataFrame([[
-            safe_float(data_dict.get('ambientTemp')),
-            safe_float(data_dict.get('ambientHum')),
-            safe_float(data_dict.get('soilTemp')),
-            safe_float(data_dict.get('soilMoisture')),
-            safe_float(data_dict.get('uvDuration')), # Using UV as light duration
-            25 # Default Pechay Count for initial prediction
-        ]], columns=ML_FEATURES)
+        input_df = pd.DataFrame([{
+            "Ambient Temperature": safe_float(data_dict.get("ambientTemp")),
+            "Ambient Humidity": safe_float(data_dict.get("ambientHum")),
+            "Soil Temperature": safe_float(data_dict.get("soilTemp")),
+            "Soil Moisture": safe_float(data_dict.get("soilMoisture")),
+            "Light Duration": safe_float(data_dict.get("uvDuration"))
+        }])[ML_FEATURES]
+
+        print("🔎 Prediction input:", input_df.to_dict(orient="records")[0])
 
         prediction = ml_model.predict(input_df)[0]
         return round(float(prediction), 2)
+
     except Exception as e:
         print(f"❌ Prediction error: {e}")
         return 7.0

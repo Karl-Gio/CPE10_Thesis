@@ -37,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // POST: Save the new settings from React
     Route::post('/configurations', [ParameterController::class, 'storeConfig']);
+    Route::get('/configurations/batch/{batch}', [ParameterController::class, 'showBatchConfig']);
 });
 
 Route::get('/batches', [BatchController::class, 'index']);

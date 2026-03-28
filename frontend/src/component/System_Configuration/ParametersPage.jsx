@@ -37,6 +37,38 @@ export default function ParametersPage() {
     }
   }, []);
 
+  const loadBatchConfig = useCallback(async (batchId) => {
+    if (!batchId) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`http://localhost:8000/api/configurations/batch/${encodeURIComponent(batchId)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data) {
+        setValues({
+          batch: res.data.batch ?? batchId,
+          ambientTemp: res.data.ambientTemp ?? 25.0,
+          ambientHum: res.data.ambientHum ?? 70.0,
+          soilMoisture: res.data.soilMoisture ?? 35.0,
+          soilTemp: res.data.soilTemp ?? 22.0,
+          uvStart: res.data.uvStart ?? "07:00",
+          uvDuration: res.data.uvDuration ?? 90,
+          ledStart: res.data.ledStart ?? "18:00",
+          ledDuration: res.data.ledDuration ?? 360,
+        });
+      }
+    } catch (err) {
+      // No saved config for this batch — keep current values, only preserve batch name
+      if (err.response?.status === 404) {
+        setValues(prev => ({ ...prev, batch: batchId }));
+      } else {
+        console.error(err);
+      }
+    }
+  }, []);
+
   // --- 2. INITIAL FETCH (Config + Batch List) ---
   useEffect(() => {
     const init = async () => {
@@ -66,10 +98,14 @@ export default function ParametersPage() {
 
   // --- 3. AUTO-LOCK WHILE TYPING/SELECTING ---
   useEffect(() => {
-    const timer = setTimeout(() => verifyLockStatus(values.batch), 600);
-    return () => clearTimeout(timer);
-  }, [values.batch, verifyLockStatus]);
+    const timer = setTimeout(async () => {
+      await loadBatchConfig(values.batch);
+      await verifyLockStatus(values.batch);
+    }, 600);
 
+    return () => clearTimeout(timer);
+  }, [values.batch, loadBatchConfig, verifyLockStatus]);
+  
   const setField = (key) => (val) => setValues(prev => ({ ...prev, [key]: val }));
   const onReset = () => setValues(initialValues);
 

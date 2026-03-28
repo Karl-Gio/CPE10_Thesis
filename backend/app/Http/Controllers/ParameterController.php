@@ -206,4 +206,32 @@ class ParameterController extends Controller
             'data'    => $newConfig
         ], 201);
     }
+
+    public function showBatchConfig(Request $request, $batch)
+    {
+        $user = $request->user();
+
+        $config = $user->parameterConfigurations()
+            ->where('batch', $batch)
+            ->latest()
+            ->first();
+
+        if (!$config) {
+            return response()->json([
+                'message' => 'No saved configuration found for this batch.'
+            ], 404);
+        }
+
+        return response()->json([
+            'batch'         => $config->batch ?? 'Batch A',
+            'ambientTemp'   => (float) $config->ambientTemp,
+            'ambientHum'    => (float) $config->ambientHum,
+            'soilMoisture'  => (float) $config->soilMoisture,
+            'soilTemp'      => (float) $config->soilTemp,
+            'uvStart'       => $config->uvStart,
+            'uvDuration'    => (int) $config->uvDuration,
+            'ledStart'      => $config->ledStart,
+            'ledDuration'   => (int) $config->ledDuration,
+        ]);
+    }
 }
