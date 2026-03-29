@@ -1,7 +1,7 @@
 import React from "react";
 import { Card, Button, Form, InputGroup, Alert, Row, Col, Badge, Spinner } from "react-bootstrap";
 
-/** * Helper: Converts "18:00" to "6:00 PM" */
+/** Helper: Converts "18:00" to "6:00 PM" */
 const formatTo12Hour = (timeStr) => {
   if (!timeStr) return "--:--";
   const [hours, minutes] = timeStr.split(':');
@@ -11,13 +11,23 @@ const formatTo12Hour = (timeStr) => {
   return `${h}:${minutes} ${ampm}`;
 };
 
-export function ParameterHeader({ onReset, onSave, isLocked, checkingStatus }) {
+export function ParameterHeader({
+  onReset,
+  onSave,
+  onSequentialShutdown,
+  isLocked,
+  checkingStatus,
+  shutdownBusy
+}) {
   return (
-    <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
       <div>
         <h3 className="fw-bold mb-0">System Configuration</h3>
         {checkingStatus ? (
-          <small className="text-muted"><Spinner size="sm" animation="border" className="me-1"/> Verifying status...</small>
+          <small className="text-muted">
+            <Spinner size="sm" animation="border" className="me-1" />
+            Verifying status...
+          </small>
         ) : isLocked ? (
           <small className="text-danger fw-bold">🔒 LOCKED: Batch pending germination detection.</small>
         ) : (
@@ -25,11 +35,32 @@ export function ParameterHeader({ onReset, onSave, isLocked, checkingStatus }) {
         )}
       </div>
 
-      <div className="d-flex gap-2">
-        <Button variant="outline-secondary" className="px-4 rounded-pill" onClick={onReset} disabled={isLocked}>
+      <div className="d-flex gap-2 flex-wrap align-items-center">
+        <Button
+          variant="outline-danger"
+          className="px-4 rounded-pill"
+          onClick={onSequentialShutdown}
+          disabled={shutdownBusy}
+          title="Turn OFF active actuators one by one every 3 seconds"
+        >
+          {shutdownBusy ? "Sending..." : "Sequential Shutdown"}
+        </Button>
+
+        <Button
+          variant="outline-secondary"
+          className="px-4 rounded-pill"
+          onClick={onReset}
+          disabled={isLocked}
+        >
           Reset
         </Button>
-        <Button variant="dark" className="px-4 rounded-pill shadow-sm" onClick={onSave} disabled={isLocked}>
+
+        <Button
+          variant="dark"
+          className="px-4 rounded-pill shadow-sm"
+          onClick={onSave}
+          disabled={isLocked}
+        >
           {isLocked ? "System Locked" : "Save & Sync"}
         </Button>
       </div>
@@ -70,7 +101,6 @@ export function ParameterField({ label, value, onChange, unit, isLocked }) {
 export function ParameterGrid({ values, setField, isLocked, existingBatches = [] }) {
   return (
     <Row className="g-3">
-      {/* Searchable Batch Dropdown */}
       <Col md={6} xl={4}>
         <Card className="shadow-sm border-0 rounded-4 h-100 border-start border-success border-4">
           <Card.Body className="p-3">
@@ -104,42 +134,101 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
         </Card>
       </Col>
 
-      <Col md={6} xl={4}><ParameterField label="Target Ambient Temp" value={values.ambientTemp} onChange={setField("ambientTemp")} unit="°C" isLocked={isLocked} /></Col>
-      <Col md={6} xl={4}><ParameterField label="Target Humidity" value={values.ambientHum} onChange={setField("ambientHum")} unit="%" isLocked={isLocked} /></Col>
-      <Col md={6} xl={4}><ParameterField label="Target Soil Moisture" value={values.soilMoisture} onChange={setField("soilMoisture")} unit="%" isLocked={isLocked} /></Col>
-      <Col md={6} xl={4}><ParameterField label="Target Soil Temp" value={values.soilTemp} onChange={setField("soilTemp")} unit="°C" isLocked={isLocked} /></Col>
+      <Col md={6} xl={4}>
+        <ParameterField
+          label="Target Ambient Temp"
+          value={values.ambientTemp}
+          onChange={setField("ambientTemp")}
+          unit="°C"
+          isLocked={isLocked}
+        />
+      </Col>
 
-      {/* UV Schedule */}
+      <Col md={6} xl={4}>
+        <ParameterField
+          label="Target Humidity"
+          value={values.ambientHum}
+          onChange={setField("ambientHum")}
+          unit="%"
+          isLocked={isLocked}
+        />
+      </Col>
+
+      <Col md={6} xl={4}>
+        <ParameterField
+          label="Target Soil Moisture"
+          value={values.soilMoisture}
+          onChange={setField("soilMoisture")}
+          unit="%"
+          isLocked={isLocked}
+        />
+      </Col>
+
+      <Col md={6} xl={4}>
+        <ParameterField
+          label="Target Soil Temp"
+          value={values.soilTemp}
+          onChange={setField("soilTemp")}
+          unit="°C"
+          isLocked={isLocked}
+        />
+      </Col>
+
       <Col md={6} xl={4}>
         <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-primary border-4 ${isLocked ? 'bg-light opacity-75' : ''}`}>
           <Card.Body className="p-3">
             <div className="d-flex justify-content-between align-items-start mb-2">
-                <div className="text-uppercase small text-primary fw-bold">UV Light</div>
-                <Badge bg="primary-subtle" className="text-primary border border-primary-subtle">{formatTo12Hour(values.uvStart)}</Badge>
+              <div className="text-uppercase small text-primary fw-bold">UV Light</div>
+              <Badge bg="primary-subtle" className="text-primary border border-primary-subtle">
+                {formatTo12Hour(values.uvStart)}
+              </Badge>
             </div>
             <Form.Group className="mb-2">
-              <Form.Control type="time" value={values.uvStart} onChange={(e) => setField("uvStart")(e.target.value)} disabled={isLocked} />
+              <Form.Control
+                type="time"
+                value={values.uvStart}
+                onChange={(e) => setField("uvStart")(e.target.value)}
+                disabled={isLocked}
+              />
             </Form.Group>
             <Form.Group>
-              <Form.Control type="number" value={values.uvDuration} onChange={(e) => setField("uvDuration")(e.target.value)} disabled={isLocked} placeholder="Mins" />
+              <Form.Control
+                type="number"
+                value={values.uvDuration}
+                onChange={(e) => setField("uvDuration")(e.target.value)}
+                disabled={isLocked}
+                placeholder="Mins"
+              />
             </Form.Group>
           </Card.Body>
         </Card>
       </Col>
 
-      {/* LED Schedule */}
       <Col md={6} xl={4}>
         <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-warning border-4 ${isLocked ? 'bg-light opacity-75' : ''}`}>
           <Card.Body className="p-3">
             <div className="d-flex justify-content-between align-items-start mb-2">
-                <div className="text-uppercase small text-warning fw-bold">LED Light</div>
-                <Badge bg="warning-subtle" className="text-warning border border-warning-subtle">{formatTo12Hour(values.ledStart)}</Badge>
+              <div className="text-uppercase small text-warning fw-bold">LED Light</div>
+              <Badge bg="warning-subtle" className="text-warning border border-warning-subtle">
+                {formatTo12Hour(values.ledStart)}
+              </Badge>
             </div>
             <Form.Group className="mb-2">
-              <Form.Control type="time" value={values.ledStart} onChange={(e) => setField("ledStart")(e.target.value)} disabled={isLocked} />
+              <Form.Control
+                type="time"
+                value={values.ledStart}
+                onChange={(e) => setField("ledStart")(e.target.value)}
+                disabled={isLocked}
+              />
             </Form.Group>
             <Form.Group>
-              <Form.Control type="number" value={values.ledDuration} onChange={(e) => setField("ledDuration")(e.target.value)} disabled={isLocked} placeholder="Mins" />
+              <Form.Control
+                type="number"
+                value={values.ledDuration}
+                onChange={(e) => setField("ledDuration")(e.target.value)}
+                disabled={isLocked}
+                placeholder="Mins"
+              />
             </Form.Group>
           </Card.Body>
         </Card>
@@ -151,11 +240,10 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
 export function ParameterNote({ isLocked }) {
   return (
     <Alert variant={isLocked ? "danger" : "warning"} className="mt-4 mb-0 rounded-4 border-0 shadow-sm">
-      <span className="fw-bold">{isLocked ? "RESTRICTED ACCESS:" : "NOTE:"}</span> {
-        isLocked 
+      <span className="fw-bold">{isLocked ? "RESTRICTED ACCESS:" : "NOTE:"}</span>{" "}
+      {isLocked
         ? "This batch is currently in the germination phase. Optimization parameters are locked until sprout detection (actual_germination_date) is validated."
-        : "Optimization Layer is active. Any changes saved will be pushed to the Raspberry Pi 5 control system immediately."
-      }
+        : "Optimization Layer is active. Any changes saved will be pushed to the Raspberry Pi 5 control system immediately."}
     </Alert>
   );
 }

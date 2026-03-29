@@ -40,7 +40,6 @@ INFERENCE_DURATION = 300    # 5 minutes
 # ============================================
 # WATERMARK SETTINGS (CCTV STYLE)
 # ============================================
-# PALITAN ITO: Ilagay dito kung kailan kayo nag-start magtanim (Year, Month, Day)
 START_DATE = date(2026, 3, 27) 
 LOCATION_TEXT_1 = "Cabuyao City, Laguna"
 LOCATION_TEXT_2 = "Calabarzon"
@@ -97,7 +96,7 @@ latest_stats = {
     "view_mode": "normal",
     "confidenceScore": 0,
     "last_saved_at": None,
-    "mode": "IDLE",  # CAMERA_OFF | IDLE | RUNNING | MANUAL
+    "mode": "IDLE",
     "next_inference_in_sec": 0,
     "remaining_inference_sec": 0,
     "manual_override": False
@@ -168,7 +167,6 @@ def is_within_program_window(date_planted_str, program_days, now=None):
         print(f"⚠️ Program window error: {e}")
         return False
 
-
 def is_led_active(start_str, end_str, now=None):
     try:
         if now is None:
@@ -191,7 +189,6 @@ def is_led_active(start_str, end_str, now=None):
         print(f"⚠️ LED schedule error: {e} | start={start_str} end={end_str}")
         return 0
 
-
 def is_uv_active(start_str, duration_mins, now=None):
     try:
         if now is None:
@@ -206,7 +203,6 @@ def is_uv_active(start_str, duration_mins, now=None):
     except Exception as e:
         print(f"⚠️ UV schedule error: {e} | start={start_str} duration={duration_mins}")
         return 0
-
 
 def build_command(params, now=None):
     if now is None:
@@ -345,11 +341,9 @@ def sync_params_from_laravel():
         if response.ok:
             data = response.json()
             
-            # Get the raw values
             led_start = data.get("ledStart", "17:00")
             led_dur = safe_int(data.get("ledDuration", 360))
 
-            # Logic: Calculate LED End Time so is_led_active() works correctly
             try:
                 start_dt = datetime.strptime(led_start, "%H:%M")
                 end_dt = start_dt + timedelta(minutes=led_dur)
@@ -374,7 +368,6 @@ def sync_params_from_laravel():
             send_command_if_changed(force=True, reason="initial sync")         
     except Exception as e:
         print(f"❌ Error syncing from Laravel: {e}")
-
 
 def train_and_get_prediction(data_dict):
     if ml_model is None:
@@ -439,7 +432,7 @@ def update_sensors():
                     latest_stats["tempMode"] = s_data.get("tempMode", latest_stats["tempMode"])
                     latest_stats["humMode"] = s_data.get("humMode", latest_stats["humMode"])
             else:
-                pass # Silent ignore para hindi spam sa console
+                pass
         except Exception as e:
             print(f"⚠️ Sensor update error: {e}")
 
@@ -469,7 +462,6 @@ def process_camera():
 
     while True:
         try:
-            # CAMERA OFF
             if not camera_active:
                 if cap is not None:
                     cap.release()
@@ -497,7 +489,6 @@ def process_camera():
                 time.sleep(0.2)
                 continue
 
-            # OPEN CAMERA
             if cap is None:
                 print("🚀 Opening camera...")
                 cap = cv2.VideoCapture(0)
@@ -520,9 +511,6 @@ def process_camera():
             final_frame = frame.copy()
             current_time = time.time()
 
-            # ============================================
-            # AUTO SCHEDULER
-            # ============================================
             if not manual_override:
                 if (not is_processing) and ((current_time - last_inference_end) >= INFERENCE_INTERVAL):
                     print("🟢 Starting scheduled inference for 5 minutes...")
@@ -547,9 +535,6 @@ def process_camera():
                         last_annotated_frame = None
                         last_masked_frame = None
 
-            # ============================================
-            # DETECTION
-            # ============================================
             if is_processing and model is not None:
                 frame_count += 1
 
@@ -601,31 +586,23 @@ def process_camera():
                 frame_count = 0
                 final_frame = frame
 
-          # ============================================
-            # NEW: WATERMARK LOGIC (CCTV Style)
-            # ============================================
             if final_frame is not None:
                 now = datetime.now()
                 current_date_str = now.strftime("%m-%d-%Y")
                 current_time_str = now.strftime("%I:%M:%S %p")
                 
-                # Calculate "Day X"
                 current_date = now.date()
                 days_passed = (current_date - START_DATE).days
                 day_text = f"Day {max(0, days_passed)}"
                 
-                # BAGO: Ginamit ang FONT_HERSHEY_PLAIN para mas malapit sa digital style
                 font = cv2.FONT_HERSHEY_PLAIN
-                # Medyo nilakihan kasi mas maliit naturally ang PLAIN font
                 font_scale = 1.0  
-                color = (255, 255, 255) # White text
+                color = (255, 255, 255)
                 thickness = 1
-                shadow_color = (0, 0, 0) # Black shadow
+                shadow_color = (0, 0, 0)
                 
-                # POSISYON: Lower Left Corner
                 x_start = 50
                 y_start = H - 120 
-                # Binawasan ang spacing kasi mas condensed ang PLAIN font
                 line_spacing = 18 
                 
                 lines = [
@@ -636,20 +613,12 @@ def process_camera():
                 
                 for i, line in enumerate(lines):
                     y_pos = y_start + (i * line_spacing)
-                    
-                    # --- GUMAWA TAYO NG OUTLINE EFFECT ---
-                    # Para makuha yung itim na border sa paligid ng puting text
                     cv2.putText(final_frame, line, (x_start + 1, y_pos), font, font_scale, shadow_color, thickness + 1)
                     cv2.putText(final_frame, line, (x_start - 1, y_pos), font, font_scale, shadow_color, thickness + 1)
                     cv2.putText(final_frame, line, (x_start, y_pos + 1), font, font_scale, shadow_color, thickness + 1)
                     cv2.putText(final_frame, line, (x_start, y_pos - 1), font, font_scale, shadow_color, thickness + 1)
-                    
-                    # Draw Real Text (Puti sa gitna)
                     cv2.putText(final_frame, line, (x_start, y_pos), font, font_scale, color, thickness)
 
-            # ============================================
-            # STATUS UPDATE
-            # ============================================
             with lock:
                 latest_stats["is_processing"] = is_processing
                 latest_stats["camera_active"] = camera_active
@@ -688,8 +657,6 @@ def process_camera():
 camera_thread = threading.Thread(target=process_camera, daemon=True)
 camera_thread.start()
 
-
-
 # ============================================
 # FLASK ROUTES
 # ============================================
@@ -726,12 +693,10 @@ def video_feed():
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-
 @app.route("/status")
 def get_status():
     with lock:
         return jsonify(dict(latest_stats))
-
 
 @app.route("/toggle_inference", methods=["POST"])
 def toggle_inference():
@@ -756,7 +721,6 @@ def toggle_inference():
         "status": is_processing,
         "manual_override": manual_override
     })
-
 
 @app.route("/set_auto_mode", methods=["POST"])
 def set_auto_mode():
@@ -789,13 +753,11 @@ def toggle_camera():
 
     return jsonify({"status": camera_active})
 
-
 @app.route("/toggle_view", methods=["POST"])
 def toggle_view():
     global view_mode
     view_mode = "masked" if view_mode == "normal" else "normal"
     return jsonify({"status": "success", "mode": view_mode})
-
 
 @app.route("/capture_image", methods=["POST"])
 def capture_image():
@@ -812,45 +774,36 @@ def capture_image():
 
     return jsonify({"status": "success", "file": filename})
 
-
 @app.route("/api/update_params", methods=["POST"])
 def update_params():
     global current_params, params_saved_once
 
     try:
-        # Get data from React (sanitizedValues)
         data = request.json if request.is_json else {}
 
-        # 1. Map React keys to variables
         batch_name = data.get("batch", "Batch A")
         
-        # Numbers
         amb_temp = safe_float(data.get("ambientTemp"), 25.0)
         amb_hum  = safe_float(data.get("ambientHum"), 70.0)
         s_moist  = safe_float(data.get("soilMoisture"), 35.0)
         s_temp   = safe_float(data.get("soilTemp"), 22.0)
         
-        # Time and Durations
         uv_start = data.get("uvStart", "07:00")
         uv_dur   = safe_int(data.get("uvDuration"), 120)
         
         led_start = data.get("ledStart", "17:00")
-        led_dur   = safe_int(data.get("ledDuration"), 360) # Minutes
+        led_dur   = safe_int(data.get("ledDuration"), 360)
 
-        # 2. Logic: Calculate LED End Time
-        # React sends 'ledDuration' in minutes. We turn it into an 'HH:MM' end string.
         try:
             start_dt = datetime.strptime(led_start, "%H:%M")
             end_dt = start_dt + timedelta(minutes=led_dur)
             led_end_str = end_dt.strftime("%H:%M")
         except Exception:
-            led_end_str = "23:59" # Fallback
+            led_end_str = "23:59"
 
-        # 3. Validation
         if uv_dur < 1 or uv_dur > 720:
             return jsonify({"status": "error", "message": "UV duration must be 1-720 mins."}), 400
 
-        # 4. Update the global dictionary to match your existing logic
         current_params.update({
             "batch": batch_name,
             "ambientTemp": amb_temp,
@@ -860,14 +813,12 @@ def update_params():
             "uvStart24": uv_start,
             "uvDurationMinutes": uv_dur,
             "ledStart24": led_start,
-            "ledEnd24": led_end_str, # Calculated for the Arduino command
-            "ledDuration": led_dur    # Stored for UI reference
+            "ledEnd24": led_end_str,
+            "ledDuration": led_dur
         })
 
         params_saved_once = True
 
-        # 5. Trigger Hardware Sync
-        # This sends the new <temp,hum,moist,temp,uv,led> command to Arduino
         sent = send_command_if_changed(force=True, reason="React UI Parameters Update")
 
         now = datetime.now()
@@ -880,11 +831,77 @@ def update_params():
             "uv": uv_on,
             "led": led_on,
             "sent_to_arduino": sent,
-            "params": current_params # Send back to React to confirm
+            "params": current_params
         })
 
     except Exception as e:
         print(f"❌ /api/update_params error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route("/api/sequential_shutdown", methods=["POST"])
+def sequential_shutdown():
+    global manual_override, is_processing, inference_start_time, max_detected
+
+    try:
+        is_processing = False
+        inference_start_time = None
+        max_detected = 0
+        manual_override = True
+
+        ok = sensor.send_command("SEQ_SHUTDOWN")
+
+        if not ok:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to send SEQ_SHUTDOWN to Arduino."
+            }), 500
+
+        with lock:
+            latest_stats["manual_override"] = True
+            latest_stats["mode"] = "MANUAL"
+
+        return jsonify({
+            "status": "success",
+            "message": "Sequential shutdown command sent.",
+            "command": "SEQ_SHUTDOWN"
+        }), 200
+
+    except Exception as e:
+        print(f"❌ /api/sequential_shutdown error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route("/api/hardware_auto", methods=["POST"])
+def hardware_auto():
+    global manual_override
+
+    try:
+        ok = sensor.send_command("AUTO")
+        if not ok:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to send AUTO to Arduino."
+            }), 500
+
+        manual_override = False
+
+        with lock:
+            latest_stats["manual_override"] = False
+            latest_stats["mode"] = "IDLE"
+
+        return jsonify({
+            "status": "success",
+            "message": "Arduino returned to AUTO mode.",
+            "command": "AUTO"
+        }), 200
+
+    except Exception as e:
+        print(f"❌ /api/hardware_auto error: {e}")
         return jsonify({
             "status": "error",
             "message": str(e)
@@ -907,7 +924,6 @@ def get_current_params():
         ),
         "command": command
     })
-
 
 @app.route("/api/resend_params", methods=["POST"])
 def resend_params():
