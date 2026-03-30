@@ -7,9 +7,9 @@ import { ParameterHeader, ParameterGrid, ParameterNote } from "./ParameterCompon
 
 export default function ParametersPage() {
   const initialValues = useMemo(() => ({
-    batch: "B-2026-001",
-    ambientTemp: 25.0, ambientHum: 70.0, soilMoisture: 35.0, soilTemp: 22.0,
-    uvStart: "07:00", uvDuration: 90, ledStart: "18:00", ledDuration: 360
+    batch: "BATCH-001",
+    ambientTemp: 20, ambientHum: 50, soilMoisture: 60, soilTemp: 25,
+    uvStart: "07:00", uvDuration: 90, ledStart: "18:00", ledDuration: 90
   }), []);
 
   const [values, setValues] = useState(initialValues);
@@ -20,6 +20,7 @@ export default function ParametersPage() {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [shutdownBusy, setShutdownBusy] = useState(false);
 
+  // Inside ParametersPage component
   const verifyLockStatus = useCallback(async (batchId) => {
     if (!batchId) return;
     setCheckingStatus(true);
@@ -28,8 +29,14 @@ export default function ParametersPage() {
       const res = await axios.get(`http://localhost:8000/api/batches/${batchId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setIsLocked(res.data.actual_germination_date === null);
+
+      if (res.data) {
+        setIsLocked(true); 
+      } else {
+        setIsLocked(false);
+      }
     } catch (err) {
+      // If 404 error, the batch doesn't exist yet, so we keep it unlocked for new entry
       setIsLocked(false);
     } finally {
       setCheckingStatus(false);
@@ -115,17 +122,28 @@ export default function ParametersPage() {
     try {
       setStatusMsg({ type: 'info', text: 'AI is calculating germination timeline...' });
 
+      // 1. Start the timer immediately before the ML call
+      const startTime = performance.now();
+
+      // 2. Get the prediction
       const mlRes = await axios.post("http://localhost:5000/api/predict", values);
       const aiPrediction = mlRes.data.predicted_days;
 
+      // 3. Calculate the difference
+      const endTime = performance.now();
+      const calculatedLatency = Math.round(endTime - startTime);
+
+      // 4. SEND TO LARAVEL (Check the key 'latency_ms' here)
       await axios.post("http://localhost:8000/api/batches", {
         batch_id: values.batch,
         date_planted: new Date().toISOString().split('T')[0],
-        predicted_days: aiPrediction
+        predicted_days: aiPrediction,
+        latency_ms: calculatedLatency
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      // 5. Save the rest of the config
       await axios.post("http://localhost:8000/api/configurations", {
         batch: values.batch,
         ambientTemp: Number(values.ambientTemp),
@@ -142,7 +160,11 @@ export default function ParametersPage() {
 
       await axios.post("http://localhost:5000/api/update_params", values);
 
-      setStatusMsg({ type: 'success', text: `✅ Optimized! Prediction: ${aiPrediction} days.` });
+      setStatusMsg({ 
+        type: 'success', 
+        text: `Optimized. Prediction: ${aiPrediction} days. Latency: ${calculatedLatency}ms.` 
+      });
+      
       verifyLockStatus(values.batch);
     } catch (error) {
       console.error(error);

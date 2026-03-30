@@ -13,10 +13,11 @@ return new class extends Migration
     {
         Schema::create('batches', function (Blueprint $table) {
             $table->id();
-            $table->string('batch_id')->unique(); // Halimbawa: B-2026-001
-            $table->date('date_planted');
-            $table->double('predicted_days'); // Ilang araw ang prediction ng AI
-            $table->date('actual_germination_date')->nullable(); // Nullable habang wala pang detection
+            $table->string('batch_id')->unique(); 
+            $table->dateTime('date_planted');
+            $table->double('predicted_days'); 
+            $table->dateTime('actual_germination_date')->nullable();
+            $table->integer('latency_ms')->nullable(); 
             $table->timestamps();
         });
     }
