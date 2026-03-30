@@ -22,16 +22,17 @@ class BatchController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'batch_id'       => 'required|unique:batches',
+            'batch_id'       => 'required|unique:batches,batch_id',
             'date_planted'   => 'required|date',
             'predicted_days' => 'required|numeric',
+            'latency_ms'     => 'nullable|integer',
         ]);
 
         $batch = Batch::create($validated);
 
         return response()->json([
             'message' => 'Batch saved successfully!',
-            'data'    => $batch
+            'data'    => $batch,
         ], 201);
     }
 
@@ -47,7 +48,7 @@ class BatchController extends Controller
 
         return response()->json([
             'message' => 'Germination date updated!',
-            'data'    => $batch
+            'data'    => $batch,
         ]);
     }
 }

@@ -12,9 +12,10 @@ app = Flask(__name__)
 CORS(app)
 
 # --- CONFIG ---
-W, H = 640, 480
-CONFIDENCE_THRESHOLD = 0.45
-SKIP_FRAMES = 3  # Reduced skip frames slightly for smoother bounding box tracking
+W, H = 3840, 2160
+# CHEAT CODE 1: Binabaan ang standards para makita lahat
+CONFIDENCE_THRESHOLD = 0.15  
+SKIP_FRAMES = 3  
 DATASET_FOLDER = "CapturedImage"
 
 if not os.path.exists(DATASET_FOLDER):
@@ -23,7 +24,7 @@ if not os.path.exists(DATASET_FOLDER):
 # --- GLOBAL VARS ---
 camera_active = False 
 is_processing = False
-view_mode = "normal" # Options: "normal", "masked"
+view_mode = "normal" 
 
 latest_stats = {
     "pechay_detected": 0, 
@@ -52,19 +53,17 @@ def process_camera():
     cap = None 
     frame_count = 0
     
-    # Cache frames to prevent flickering during skips
     last_annotated_frame = None 
     last_masked_frame = None
 
     while True:
-        # 1. SLEEP MODE (If camera is off)
+        # 1. SLEEP MODE 
         if not camera_active:
             if cap is not None:
                 cap.release()
                 cap = None
                 print("zzZ Camera entered sleep mode...")
                 with lock:
-                    # Create a black placeholder when camera is off
                     output_frame = np.zeros((H, W, 3), dtype=np.uint8)
             time.sleep(0.2)
             continue
@@ -72,10 +71,10 @@ def process_camera():
         # 2. START CAMERA
         if cap is None:
             print("🚀 Starting Camera...")
-            cap = cv2.VideoCapture(0) # Change index if using external cam
+            cap = cv2.VideoCapture(0) 
             cap.set(3, W)
             cap.set(4, H)
-            time.sleep(0.5) # Reduced wait time
+            time.sleep(0.5) 
             
             if not cap.isOpened():
                 print("❌ Failed to open camera! Retrying...")
@@ -92,56 +91,49 @@ def process_camera():
 
         # --- MIRROR FRAME ---
         frame = cv2.flip(frame, 1)
-
-        # Initialize display frames
         final_frame = frame.copy()
         
         # --- AI DETECTION LOGIC ---
         if is_processing and model is not None:
             frame_count += 1
             
-            # Perform Detection (every SKIP_FRAMES)
             if frame_count % SKIP_FRAMES == 0 or last_annotated_frame is None:
-                results = model.predict(frame, conf=CONFIDENCE_THRESHOLD, verbose=False, imgsz=320)
+                
+                # CHEAT CODE 2 & 3: Linalakihan ang imgsz at nilagyan ng iou=0.45 para di mawala ang box
+                results = model.predict(frame, conf=CONFIDENCE_THRESHOLD, verbose=False, imgsz=1280, iou=0.45)
                 
                 count = len(results[0].boxes)
                 
-                # Stats Calculation
                 if count > 0:
                     conf_sum = sum([box.conf.item() for box in results[0].boxes])
                     current_conf = round((conf_sum / count) * 100, 1)
                 else:
-                    current_conf = 0  # <--- Dapat ZERO pag walang nakita.
+                    current_conf = 0  
                 
-                # --- PREPARE FRAMES ---
-                annotated_frame = frame.copy()          # Normal + Box
-                masked_frame = np.zeros_like(frame)     # Black background
+                annotated_frame = frame.copy()          
+                masked_frame = np.zeros_like(frame)     
                 
                 for result in results:
                     for box in result.boxes:
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
                         conf = float(box.conf[0])
 
-                        # Ensure coordinates are within frame bounds (prevent crash)
                         x1, y1 = max(0, x1), max(0, y1)
                         x2, y2 = min(W, x2), min(H, y2)
 
-                        # --- A. ANNOTATED FRAME (Normal View) ---
+                        # --- A. ANNOTATED FRAME ---
                         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                         label = f"Pechay {conf:.2f}"
                         cv2.putText(annotated_frame, label, (x1, y1 - 10), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                        # --- B. MASKED FRAME (Black BG + Real Object) ---
-                        # Copy only the Pechay area (ROI) to the black frame
+                        # --- B. MASKED FRAME ---
                         try:
                             masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
-                            # Optional: Draw a thin box on the masked view too so you see boundaries
                             cv2.rectangle(masked_frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
                         except:
-                            pass # Handle edge cases
+                            pass 
                 
-                # Save to cache
                 last_annotated_frame = annotated_frame
                 last_masked_frame = masked_frame
                 
@@ -149,7 +141,6 @@ def process_camera():
                 latest_stats["confidenceScore"] = current_conf
             
             else:
-                # Use cached frames to reduce lag (between skip frames)
                 if last_annotated_frame is not None:
                     annotated_frame = last_annotated_frame
                     masked_frame = last_masked_frame
@@ -157,19 +148,16 @@ def process_camera():
                     annotated_frame = frame
                     masked_frame = np.zeros_like(frame)
 
-            # --- SELECT WHICH FRAME TO SHOW ---
             if view_mode == "masked":
-                final_frame = masked_frame # Ito yung BLACK background + Pechay
+                final_frame = masked_frame 
             else:
-                final_frame = annotated_frame # Ito yung Normal Video + Green Box
+                final_frame = annotated_frame 
 
         else:
-            # If processing is OFF, just show raw camera
             frame_count = 0
             latest_stats["pechay_detected"] = 0
             final_frame = frame
 
-        # Update stats
         latest_stats["is_processing"] = is_processing
         latest_stats["camera_active"] = camera_active
         latest_stats["view_mode"] = view_mode
@@ -177,21 +165,17 @@ def process_camera():
         with lock:
             output_frame = final_frame.copy()
         
-        # Tiny sleep to prevent CPU 100% usage, but fast enough for smooth video
         time.sleep(0.005)
 
-# Start Thread
 t = threading.Thread(target=process_camera)
 t.daemon = True
 t.start()
 
 # --- ROUTES ---
-
 @app.route('/video_feed')
 def video_feed():
     def generate():
         while True:
-            # If camera is strictly OFF, don't stream or stream a placeholder
             if not camera_active and output_frame is None:
                 time.sleep(0.5)
                 continue     
@@ -200,14 +184,11 @@ def video_feed():
                 if output_frame is None:
                     time.sleep(0.05)
                     continue
-                # Compress image
                 (flag, encodedImage) = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
             
             if not flag: continue
             
             yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + encodedImage.tobytes() + b'\r\n')
-            
-            # Reduced sleep for smoother frontend video
             time.sleep(0.03) 
 
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -228,14 +209,13 @@ def toggle_camera():
     global camera_active, is_processing
     camera_active = not camera_active
     if not camera_active:
-        is_processing = False # Turn off AI if camera is off
+        is_processing = False 
     print(f"Camera Toggled: {camera_active}")
     return jsonify({"status": camera_active})
 
 @app.route('/toggle_view', methods=['POST'])
 def toggle_view():
     global view_mode
-    # Toggle logic
     view_mode = "masked" if view_mode == "normal" else "normal"
     print(f"View Mode Toggled: {view_mode}")
     return jsonify({"status": "success", "mode": view_mode})

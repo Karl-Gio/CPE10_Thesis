@@ -1,7 +1,6 @@
 import React from "react";
 import { Card, Button, Form, InputGroup, Alert, Row, Col, Badge, Spinner } from "react-bootstrap";
 
-/** Helper: Converts "18:00" to "6:00 PM" */
 const formatTo12Hour = (timeStr) => {
   if (!timeStr) return "--:--";
   const [hours, minutes] = timeStr.split(':');
@@ -9,6 +8,23 @@ const formatTo12Hour = (timeStr) => {
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${minutes} ${ampm}`;
+};
+
+const formatMinutesToTime = (minutes, startTime = "00:00") => {
+  if (!minutes) return "--";
+
+  const [h, m] = startTime.split(":").map(Number);
+
+  const startTotal = h * 60 + m;
+  const endTotal = startTotal + Number(minutes);
+
+  const endH = Math.floor((endTotal / 60) % 24);
+  const endM = endTotal % 60;
+
+  const ampm = endH >= 12 ? "PM" : "AM";
+  const displayH = endH % 12 || 12;
+
+  return `${displayH}:${endM.toString().padStart(2, "0")} ${ampm}`;
 };
 
 export function ParameterHeader({
@@ -182,6 +198,9 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
               <Badge bg="primary-subtle" className="text-primary border border-primary-subtle">
                 {formatTo12Hour(values.uvStart)}
               </Badge>
+              <Badge bg="info">
+                Ends at: {formatMinutesToTime(values.uvDuration, values.uvStart)}
+              </Badge>
             </div>
             <Form.Group className="mb-2">
               <Form.Control
@@ -212,6 +231,9 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
               <Badge bg="warning-subtle" className="text-warning border border-warning-subtle">
                 {formatTo12Hour(values.ledStart)}
               </Badge>
+              <Badge bg="info">
+                Ends at: {formatMinutesToTime(values.ledDuration, values.ledStart)}
+              </Badge>
             </div>
             <Form.Group className="mb-2">
               <Form.Control
@@ -240,9 +262,9 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
 export function ParameterNote({ isLocked }) {
   return (
     <Alert variant={isLocked ? "danger" : "warning"} className="mt-4 mb-0 rounded-4 border-0 shadow-sm">
-      <span className="fw-bold">{isLocked ? "RESTRICTED ACCESS:" : "NOTE:"}</span>{" "}
+      <span className="fw-bold">{isLocked ? "READ-ONLY MODE:" : "NOTE:"}</span>{" "}
       {isLocked
-        ? "This batch is currently in the germination phase. Optimization parameters are locked until sprout detection (actual_germination_date) is validated."
+        ? "This batch configuration is archived or active. Parameters are locked to preserve experimental integrity."
         : "Optimization Layer is active. Any changes saved will be pushed to the Raspberry Pi 5 control system immediately."}
     </Alert>
   );
