@@ -1,10 +1,10 @@
-
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import Card from "react-bootstrap/Card";
-import Button from "react-bootstrap/Button";
 import Badge from "react-bootstrap/Badge";
 import Stack from "react-bootstrap/Stack";
+import Spinner from "react-bootstrap/Spinner";
+import Alert from "react-bootstrap/Alert";
 import React, { useState, useEffect } from "react";
 import {
   Chart as ChartJS,
@@ -18,33 +18,52 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
-//* ---------------- Reusable Metric Card (Updated) ---------------- */
-function MetricCard({ title, value, badgeText, subLeft, icon, extraValue, extraTitle }) {
+function MetricCard({
+  title,
+  value,
+  badgeText,
+  subLeft,
+  icon,
+  extraValue,
+  extraTitle,
+}) {
   return (
     <Card className="shadow-sm h-100 border-0 rounded-4">
       <Card.Body>
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="text-uppercase small text-muted fw-bold">{title}</div>
-          <div className="bg-light d-flex align-items-center justify-content-center" style={{ width: 34, height: 34, borderRadius: 10 }}>
+          <div
+            className="bg-light d-flex align-items-center justify-content-center"
+            style={{ width: 34, height: 34, borderRadius: 10 }}
+          >
             {icon}
           </div>
         </div>
-        
+
         <div className="d-flex align-items-end gap-4">
-          {/* Main Value (Intensity) */}
           <div>
             <div className="fs-3 fw-bold">{value}</div>
           </div>
 
-          {/* UV Duration (Visible only if extraValue is provided) */}
           {extraValue !== undefined && (
             <div className="border-start ps-3 pb-1">
-              <div className="text-uppercase text-muted fw-bold" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
+              <div
+                className="text-uppercase text-muted fw-bold"
+                style={{ fontSize: "10px", letterSpacing: "0.5px" }}
+              >
                 {extraTitle}
               </div>
-              <div className="fw-bold text-primary" style={{ fontSize: '1.1rem' }}>
+              <div className="fw-bold text-primary" style={{ fontSize: "1.1rem" }}>
                 {extraValue} <span className="small fw-normal text-muted">mins</span>
               </div>
             </div>
@@ -53,7 +72,12 @@ function MetricCard({ title, value, badgeText, subLeft, icon, extraValue, extraT
 
         <div className="d-flex align-items-center gap-2 mt-2">
           {badgeText && (
-            <Badge bg={badgeText === "Warning" || badgeText === "Dry" ? "danger" : "success"} className="bg-opacity-25 text-dark border">
+            <Badge
+              bg={
+                badgeText === "Warning" || badgeText === "Dry" ? "danger" : "success"
+              }
+              className="bg-opacity-25 text-dark border"
+            >
               {badgeText}
             </Badge>
           )}
@@ -64,61 +88,97 @@ function MetricCard({ title, value, badgeText, subLeft, icon, extraValue, extraT
   );
 }
 
-/* ----------------/* ---------------- Metric Grid (Dynamic) ---------------- */
 export function MetricGrid() {
   const [liveData, setLiveData] = useState({
-    temp: 0, hum: 0, lux: 0, sMOIST: 0, sTEMP: 0, pechay_detected: 0
+    temp: 0,
+    hum: 0,
+    lux: 0,
+    sMOIST: 0,
+    sTEMP: 0,
+    pechay_detected: 0,
+    batch: null,
+    created_at: null,
   });
-  
-  // State para sa UV Duration galing sa Config
+
   const [uvDuration, setUvDuration] = useState(0);
 
   useEffect(() => {
-    // 1. Fetch Config once (o pwede ring i-interval kung nagbabago madalas)
     const fetchConfig = async () => {
       try {
         const token = localStorage.getItem("token");
+        if (!token) return;
+
         const res = await fetch("http://localhost:8000/api/configurations/active", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
         });
+
+        if (!res.ok) throw new Error("Failed to fetch active configuration");
+
         const data = await res.json();
-        if (data) setUvDuration(data.uvDuration || 0);
+        setUvDuration(data?.uvDuration || 0);
       } catch (err) {
         console.error("Config Fetch Error:", err);
       }
     };
 
-    // 2. Fetch Sensor Data (Interval)
     const fetchStats = async () => {
       try {
-        const res = await fetch("/api_python/status");
-        if (!res.ok) throw new Error("Network response was not ok");
+        const res = await fetch("http://localhost:5000/status");
+
+        if (!res.ok) throw new Error("Failed to fetch latest dashboard data");
+
         const data = await res.json();
         setLiveData(data);
       } catch (err) {
-        console.error("Hardware API Error:", err.message);
+        console.error("Latest Data Fetch Error:", err.message);
       }
     };
 
     fetchConfig();
     fetchStats();
-    const interval = setInterval(fetchStats, 2000); 
+
+    const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const sensorMetrics = [
-    { title: "Ambient Temp", value: `${(liveData.temp || 0).toFixed(2)}°C`, icon: "🌡️" },
-    { title: "Ambient Hum", value: `${(liveData.hum || 0).toFixed(2)}%`, icon: "💧" },
-    { 
-      title: "Light Intensity", 
-      value: `${(liveData.lux || 0).toFixed(0)} lx`, 
-      icon: "☀️",
-      extraTitle: "UV Duration",  // Label para sa UV
-      extraValue: uvDuration      // Ang value galing sa config
+    {
+      title: "Ambient Temp",
+      value: `${Number(liveData.temp || 0).toFixed(2)}°C`,
+      icon: "🌡️",
     },
-    { title: "Soil Temp", value: `${(liveData.sTEMP || 0).toFixed(2)}°C`, icon: "🏜️" },
-    { title: "Soil Moisture", value: `${(liveData.sMOIST || 0).toFixed(2)}%`, icon: "🌱" },
-    { title: "Pechay Count", value: liveData.pechay_detected || 0, badgeText: "Live", subLeft: "YOLOv8", icon: "🥬" },
+    {
+      title: "Ambient Hum",
+      value: `${Number(liveData.hum || 0).toFixed(2)}%`,
+      icon: "💧",
+    },
+    {
+      title: "Light Intensity",
+      value: `${Number(liveData.lux || 0).toFixed(0)} lx`,
+      icon: "☀️",
+      extraTitle: "UV Duration",
+      extraValue: uvDuration,
+    },
+    {
+      title: "Soil Temp",
+      value: `${Number(liveData.sTEMP || 0).toFixed(2)}°C`,
+      icon: "🏜️",
+    },
+    {
+      title: "Soil Moisture",
+      value: `${Number(liveData.sMOIST || 0).toFixed(2)}%`,
+      icon: "🌱",
+    },
+    {
+      title: "Pechay Count",
+      value: liveData.pechay_detected || 0,
+      badgeText: "Live",
+      subLeft: liveData.batch ? `Batch: ${liveData.batch}` : "YOLOv8",
+      icon: "🥬",
+    },
   ];
 
   return (
@@ -132,13 +192,53 @@ export function MetricGrid() {
   );
 }
 
-/* ---------------- Trends Chart ---------------- */
-export function EnvironmentalTrendsChart({ timeLabels, temperatureData, humidityData }) {
+export function EnvironmentalTrendsChart({
+  timeLabels,
+  temperatureData,
+  humidityData,
+  soilTempData,
+  soilMoistureData,
+  lightData,
+}) {
   const data = {
     labels: timeLabels,
     datasets: [
-      { label: "Temp (°C)", data: temperatureData, borderColor: "#00b37a", tension: 0.35, pointRadius: 0 },
-      { label: "Hum (%)", data: humidityData, borderColor: "#2f6bff", borderDash: [6, 6], tension: 0.35, pointRadius: 0 },
+      {
+        label: "Temp (°C)",
+        data: temperatureData,
+        borderColor: "#00b37a",
+        tension: 0.35,
+        pointRadius: 2,
+      },
+      {
+        label: "Humidity (%)",
+        data: humidityData,
+        borderColor: "#2f6bff",
+        borderDash: [6, 6],
+        tension: 0.35,
+        pointRadius: 2,
+      },
+      {
+        label: "Soil Temp (°C)",
+        data: soilTempData,
+        borderColor: "#ff8c00",
+        tension: 0.35,
+        pointRadius: 2,
+      },
+      {
+        label: "Soil Moisture (%)",
+        data: soilMoistureData,
+        borderColor: "#8b5cf6",
+        tension: 0.35,
+        pointRadius: 2,
+      },
+      {
+        label: "Light Intensity (lx)",
+        data: lightData,
+        borderColor: "#facc15",
+        tension: 0.35,
+        pointRadius: 2,
+      },
     ],
   };
 
@@ -147,44 +247,117 @@ export function EnvironmentalTrendsChart({ timeLabels, temperatureData, humidity
       <Line data={data} options={{ responsive: true, maintainAspectRatio: false }} />
     </div>
   );
-}
+} 
 
-/* ---------------- System Health ---------------- */
-export function SystemHealthCard() {
+export function SystemHealthCard({ trendsLoading, trendsError, latestTimestamp }) {
+  const isOperational = !trendsError;
+
   return (
     <Card className="shadow-sm h-100 border-0 rounded-4">
       <Card.Body>
         <h5 className="mb-3 fw-bold">System Health</h5>
-        <div className="p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25 mb-3">
+
+        <div
+          className={`p-3 rounded mb-3 border ${
+            isOperational
+              ? "bg-success bg-opacity-10 border-success border-opacity-25"
+              : "bg-danger bg-opacity-10 border-danger border-opacity-25"
+          }`}
+        >
           <Stack direction="horizontal" gap={2}>
-            <span className="text-success">●</span>
+            <span className={isOperational ? "text-success" : "text-danger"}>●</span>
             <div>
-              <div className="fw-bold text-success">System Operational</div>
-              <div className="small text-muted">All sensors active</div>
+              <div className={`fw-bold ${isOperational ? "text-success" : "text-danger"}`}>
+                {isOperational ? "System Operational" : "System Issue Detected"}
+              </div>
+              <div className="small text-muted">
+                {isOperational ? "Trend endpoint responding normally" : "Unable to load trend data"}
+              </div>
             </div>
           </Stack>
         </div>
+
         <div className="text-uppercase small text-muted fw-bold mb-2">Logs</div>
+
         <div className="d-flex justify-content-between py-2 border-bottom">
-          <span>Hardware Interface</span>
-          <span className="text-success fw-bold">Connected</span>
+          <span>Trend API</span>
+          <span className={isOperational ? "text-success fw-bold" : "text-danger fw-bold"}>
+            {trendsLoading ? "Loading..." : isOperational ? "Connected" : "Disconnected"}
+          </span>
         </div>
-        <div className="d-flex justify-content-between py-2">
+
+        <div className="d-flex justify-content-between py-2 border-bottom">
           <span>AI Inference</span>
           <span className="text-success fw-bold">Active</span>
+        </div>
+
+        <div className="d-flex justify-content-between py-2">
+          <span>Latest Trend Point</span>
+          <span className="text-muted fw-bold">{latestTimestamp || "No data"}</span>
         </div>
       </Card.Body>
     </Card>
   );
 }
 
-/* ---------------- Main Container ---------------- */
 export function TrendsAndHealth() {
-  const chartData = {
-    labels: ["16:00", "16:01", "16:02", "16:03", "16:04", "16:05"],
-    temp: [25.0, 24.8, 25.1, 24.9, 25.0, 25.2],
-    humidity: [70, 69, 71, 70, 68, 70],
-  };
+  const [chartData, setChartData] = useState({
+    labels: [],
+    temp: [],
+    humidity: [],
+    soilMoisture: [],
+    soilTemp: [],
+    light: [],
+    pechayCount: [],
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchTrends = async () => {
+      try {
+        if (loading === false) {
+          setError("");
+        }
+
+        const res = await fetch("http://localhost:8000/api/dashboard/trends", {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch trends");
+
+        const data = await res.json();
+
+        setChartData({
+          labels: Array.isArray(data.labels) ? data.labels : [],
+          temp: Array.isArray(data.temp) ? data.temp : [],
+          humidity: Array.isArray(data.humidity) ? data.humidity : [],
+          soilMoisture: Array.isArray(data.soilMoisture) ? data.soilMoisture : [],
+          soilTemp: Array.isArray(data.soilTemp) ? data.soilTemp : [],
+          light: Array.isArray(data.light) ? data.light : [],
+          pechayCount: Array.isArray(data.pechayCount) ? data.pechayCount : [],
+        });
+
+        setError("");
+      } catch (err) {
+        console.error("Trend Fetch Error:", err);
+        setError("Could not load environmental trends.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrends();
+    const interval = setInterval(fetchTrends, 5000);
+
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  const latestLabel =
+    chartData.labels.length > 0 ? chartData.labels[chartData.labels.length - 1] : null;
 
   return (
     <Row className="g-3">
@@ -192,11 +365,36 @@ export function TrendsAndHealth() {
         <Card className="shadow-sm h-100 border-0 rounded-4">
           <Card.Body>
             <h5 className="mb-3 fw-bold">Environmental Trends</h5>
-            <EnvironmentalTrendsChart timeLabels={chartData.labels} temperatureData={chartData.temp} humidityData={chartData.humidity} />
+
+            {loading ? (
+              <div className="d-flex justify-content-center align-items-center" style={{ height: 280 }}>
+                <Spinner animation="border" variant="success" />
+              </div>
+            ) : error ? (
+              <Alert variant="danger" className="mb-0">
+                {error}
+              </Alert>
+            ) : (
+              <EnvironmentalTrendsChart
+                timeLabels={chartData.labels}
+                temperatureData={chartData.temp}
+                humidityData={chartData.humidity}
+                soilTempData={chartData.soilTemp}
+                soilMoistureData={chartData.soilMoisture}
+                lightData={chartData.light}
+              />
+            )}
           </Card.Body>
         </Card>
       </Col>
-      <Col xl={4}><SystemHealthCard /></Col>
+
+      <Col xl={4}>
+        <SystemHealthCard
+          trendsLoading={loading}
+          trendsError={error}
+          latestTimestamp={latestLabel}
+        />
+      </Col>
     </Row>
   );
 }

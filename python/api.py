@@ -841,6 +841,49 @@ def update_params():
             "message": str(e)
         }), 500
 
+@app.route("/api/testing_command", methods=["POST"])
+def testing_command():
+    try:
+        data = request.json or {}
+
+        command = data.get("command")
+
+        if not command:
+            return jsonify({
+                "status": "error",
+                "message": "No command provided"
+            }), 400
+
+        print("====================================")
+        print("🧪 TESTING MODE COMMAND RECEIVED")
+        print(f"📦 Command: {command}")
+        print("====================================")
+
+        ok = sensor.send_command(command)
+
+        if not ok:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to send to Arduino"
+            }), 500
+
+        # Optional: update UI state
+        with lock:
+            latest_stats["mode"] = "TESTING"
+
+        return jsonify({
+            "status": "success",
+            "command": command,
+            "sent": True
+        })
+
+    except Exception as e:
+        print(f"❌ testing_command error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 @app.route("/api/sequential_shutdown", methods=["POST"])
 def sequential_shutdown():
     global manual_override, is_processing, inference_start_time, max_detected
