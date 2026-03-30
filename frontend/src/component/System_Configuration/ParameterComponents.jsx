@@ -114,7 +114,20 @@ export function ParameterField({ label, value, onChange, unit, isLocked }) {
   );
 }
 
-export function ParameterGrid({ values, setField, isLocked, existingBatches = [] }) {
+export function ParameterGrid({
+  values,
+  setField,
+  isLocked,
+  existingBatches = [],
+  latestBatch = null,
+  newBatchBlocked = false,
+  selectedBatchExists = false,
+}) {
+  const latestBatchId =
+    latestBatch?.actual_batch || latestBatch?.batch_name || latestBatch?.batch_id || "";
+
+  const latestIncomplete = latestBatch && !latestBatch.actual_germination_date;
+
   return (
     <Row className="g-3">
       <Col md={6} xl={4}>
@@ -132,19 +145,35 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
                 placeholder="Type or select batch..."
               />
               <datalist id="batchList">
-                {existingBatches.map((b) => (
-                  <option
-                    key={b.id}
-                    value={b.actual_batch || b.batch_name || b.batch_id}
-                    label={`${b.actual_batch || b.batch_name || b.batch_id} ${
-                      b.actual_germination_date ? "- Completed" : "- In Progress"
-                    }`}
-                  />
-                ))}
+                {existingBatches.map((b) => {
+                  const batchValue = b.actual_batch || b.batch_name || b.batch_id;
+                  const isDone = !!b.actual_germination_date;
+
+                  return (
+                    <option
+                      key={b.id}
+                      value={batchValue}
+                      label={`${batchValue} ${isDone ? "- Completed" : "- In Progress"}`}
+                    />
+                  );
+                })}
               </datalist>
-              <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                Pick existing to view or type new ID to start.
+
+              <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
+                Select any existing batch to view it in read-only mode.
               </small>
+
+              {selectedBatchExists && (
+                <small className="text-danger d-block mt-1" style={{ fontSize: "0.75rem" }}>
+                  Existing batch selected. Editing is disabled to preserve saved data.
+                </small>
+              )}
+
+              {newBatchBlocked && latestIncomplete && (
+                <small className="text-danger d-block mt-1" style={{ fontSize: "0.75rem" }}>
+                  New batch creation is blocked until latest batch ({latestBatchId}) is completed.
+                </small>
+              )}
             </Form.Group>
           </Card.Body>
         </Card>
@@ -191,7 +220,7 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
       </Col>
 
       <Col md={6} xl={4}>
-        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-primary border-4 ${isLocked ? 'bg-light opacity-75' : ''}`}>
+        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-primary border-4 ${isLocked ? "bg-light opacity-75" : ""}`}>
           <Card.Body className="p-3">
             <div className="d-flex justify-content-between align-items-start mb-2">
               <div className="text-uppercase small text-primary fw-bold">UV Light</div>
@@ -224,7 +253,7 @@ export function ParameterGrid({ values, setField, isLocked, existingBatches = []
       </Col>
 
       <Col md={6} xl={4}>
-        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-warning border-4 ${isLocked ? 'bg-light opacity-75' : ''}`}>
+        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-warning border-4 ${isLocked ? "bg-light opacity-75" : ""}`}>
           <Card.Body className="p-3">
             <div className="d-flex justify-content-between align-items-start mb-2">
               <div className="text-uppercase small text-warning fw-bold">LED Light</div>
