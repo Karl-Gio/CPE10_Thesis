@@ -12,6 +12,7 @@ export function SideBar() {
 
   const handleLogout = async () => {
     const token = localStorage.getItem("token");
+
     try {
       await axios.post(
         "http://localhost:8000/api/logout",
@@ -21,6 +22,7 @@ export function SideBar() {
     } catch (error) {
       console.error("Logout error:", error);
     }
+
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/");
@@ -37,7 +39,10 @@ export function SideBar() {
   });
 
   return (
-    <div className="bg-dark text-white d-flex flex-column p-3" style={{ width: 260, minHeight: "100vh" }}>
+    <div
+      className="bg-dark text-white d-flex flex-column p-3"
+      style={{ width: 260, minHeight: "100vh" }}
+    >
       <div className="d-flex align-items-center gap-2 mb-4">
         <div
           className="bg-success text-dark fw-bold d-flex align-items-center justify-content-center"
@@ -50,18 +55,34 @@ export function SideBar() {
 
       <div className="text-uppercase small opacity-75 mb-2">Monitoring</div>
       <Nav className="flex-column gap-1 mb-3">
-        <NavLink to="/dashboard" style={linkStyle}>📊 Dashboard</NavLink>
-        <NavLink to="/prediction" style={linkStyle}>📈 Prediction</NavLink>
+        <NavLink to="/dashboard" style={linkStyle}>
+          📊 Dashboard
+        </NavLink>
+        <NavLink to="/prediction" style={linkStyle}>
+          📈 Prediction
+        </NavLink>
       </Nav>
 
       <div className="text-uppercase small opacity-75 mb-2">Controls</div>
       <Nav className="flex-column gap-1">
-        <NavLink to="/parameters" style={linkStyle}>⚙️ Parameters</NavLink>
-        <NavLink to="/validation" style={linkStyle}>✅ Validation</NavLink>
+        <NavLink to="/parameters" style={linkStyle}>
+          ⚙️ Parameters
+        </NavLink>
+        <NavLink to="/testing" style={linkStyle}>
+          🧪 Testing
+        </NavLink>
+        <NavLink to="/validation" style={linkStyle}>
+          ✅ Validation
+        </NavLink>
       </Nav>
 
       <div className="mt-auto pt-3 border-top border-light border-opacity-25">
-        <Button variant="outline-light" size="sm" className="w-100" onClick={handleLogout}>
+        <Button
+          variant="outline-light"
+          size="sm"
+          className="w-100"
+          onClick={handleLogout}
+        >
           Log Out
         </Button>
       </div>
@@ -75,18 +96,17 @@ export function DashboardHeader({ title }) {
   const [userName, setUserName] = useState("");
 
   useEffect(() => {
-  const userString = localStorage.getItem("user");
-  if (userString) {
-    try {
-      // Susubukan niyang basahin kung JSON format
-      const userObject = JSON.parse(userString);
-      setUserName(userObject.name || "");
-    } catch (error) {
-      // Kapag hindi JSON (tulad ng "gio" lang), ito ang gagamitin niya
-      setUserName(userString);
+    const userString = localStorage.getItem("user");
+
+    if (userString) {
+      try {
+        const userObject = JSON.parse(userString);
+        setUserName(userObject.name || "");
+      } catch (error) {
+        setUserName(userString);
+      }
     }
-  }
-}, []);
+  }, []);
 
   const initial = (userName?.[0] || "U").toUpperCase();
 
