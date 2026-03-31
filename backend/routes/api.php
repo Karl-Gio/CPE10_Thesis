@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ParameterController;
 use App\Http\Controllers\BatchController;
+use App\Http\Controllers\TestingParameterController;
+use App\Http\Controllers\TestingParameterValueController;
 
 // ==========================================
 // PUBLIC ROUTES (No login needed)
@@ -44,3 +46,11 @@ Route::get('/batches', [BatchController::class, 'index']);
 Route::get('/batches/{batch_id}', [BatchController::class, 'show']);
 Route::post('/batches', [BatchController::class, 'store']);
 Route::patch('/batches/{batch_id}', [BatchController::class, 'update']);
+
+Route::apiResource('testing-parameters', TestingParameterController::class);
+
+Route::prefix('testing-values')->group(function () {
+    Route::post('/', [TestingParameterValueController::class, 'store']);
+    Route::get('/', [TestingParameterValueController::class, 'index']);
+    Route::get('/latest', [TestingParameterValueController::class, 'latest']);
+});
