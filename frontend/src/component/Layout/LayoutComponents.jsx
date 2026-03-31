@@ -71,6 +71,7 @@ export function SideBar() {
         <NavLink to="/testing" style={linkStyle}>
           🧪 Testing
         </NavLink>
+
         <NavLink to="/validation" style={linkStyle}>
           ✅ Validation
         </NavLink>

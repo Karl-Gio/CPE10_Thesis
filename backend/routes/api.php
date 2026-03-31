@@ -42,6 +42,5 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::get('/batches', [BatchController::class, 'index']);
 Route::get('/batches/{batch_id}', [BatchController::class, 'show']);
-
-Route::post('/batches', [BatchController::class, 'store']); 
+Route::post('/batches', [BatchController::class, 'store']);
 Route::patch('/batches/{batch_id}', [BatchController::class, 'update']);

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('batch_id')->unique(); 
             $table->dateTime('date_planted');
-            $table->double('predicted_days'); 
+            $table->double('predicted_days')->nullable(); 
             $table->dateTime('actual_germination_date')->nullable();
             $table->integer('latency_ms')->nullable(); 
             $table->timestamps();
