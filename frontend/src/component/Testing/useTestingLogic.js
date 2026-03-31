@@ -2,25 +2,25 @@ import { useState, useMemo } from "react";
 import axios from "axios";
 
 export const useTestingLogic = () => {
-  const initialValues = useMemo(() => ({
-    batch: "",
-    ambientTemp: "",
-    ambientHum: "",
-    soilMoisture: "",
-    soilTemp: "",
-    uvStart: "",
-    uvDuration: "",
-    ledStart: "",
-    ledDuration: "",
-    uv: 0,
-    led: 0,
-    peltier: 0,
-    heater: 0,
-    intakeFan: 0,
-    exhaustFan: 0,
-    buzzer: 0,
-    pump: 0,
-  }), []);
+  const initialValues = useMemo(
+    () => ({
+      batch: "",
+      ambientTemp: "",
+      ambientHum: "",
+      soilMoisture: "",
+      soilTemp: "",
+      duration: "",
+      uv: 0,
+      led: 0,
+      peltier: 0,
+      heater: 0,
+      intakeFan: 0,
+      exhaustFan: 0,
+      buzzer: 0,
+      pump: 0,
+    }),
+    []
+  );
 
   const [values, setValues] = useState(initialValues);
   const [sending, setSending] = useState(false);
@@ -34,11 +34,45 @@ export const useTestingLogic = () => {
   const onSendParams = async () => {
     try {
       setSending(true);
-      const { uv, led, peltier, heater, intakeFan, exhaustFan, buzzer, pump, ...params } = values;
-      await axios.post("http://localhost:5000/api/update_params", params);
-      setStatusMsg({ type: "success", text: "Parameters sent successfully!" });
+      setStatusMsg({ type: "", text: "" });
+
+      const payload = {
+        batch: values.batch?.trim() || "Batch A",
+        ambient_temp: Number(values.ambientTemp || 0),
+        ambient_humidity: Number(values.ambientHum || 0),
+        soil_moisture: Number(values.soilMoisture || 0),
+        soil_temp: Number(values.soilTemp || 0),
+        uv: Number(values.uv || 0),
+        led: Number(values.led || 0),
+        duration: Number(values.duration || 30),
+      };
+
+      if (payload.duration < 1) {
+        setStatusMsg({
+          type: "danger",
+          text: "Duration must be at least 1 minute.",
+        });
+        return;
+      }
+
+      const res = await axios.post(
+        "http://localhost:5000/api/testing-parameters",
+        payload
+      );
+
+      setStatusMsg({
+        type: "success",
+        text: res.data?.message || "Testing session started successfully.",
+      });
     } catch (error) {
-      setStatusMsg({ type: "danger", text: "Failed to send parameters." });
+      console.error("onSendParams error:", error.response?.data || error);
+
+      setStatusMsg({
+        type: "danger",
+        text:
+          error.response?.data?.message ||
+          "Failed to start testing session.",
+      });
     } finally {
       setSending(false);
     }
@@ -47,10 +81,26 @@ export const useTestingLogic = () => {
   const onSendHardware = async () => {
     try {
       setSending(true);
-      await axios.post("http://localhost:5000/api/testing_command", { command });
-      setStatusMsg({ type: "success", text: `Hardware command sent: ${command}` });
+      setStatusMsg({ type: "", text: "" });
+
+      const res = await axios.post(
+        "http://localhost:5000/api/testing_command",
+        { command }
+      );
+
+      setStatusMsg({
+        type: "success",
+        text: res.data?.message || `Hardware command sent: ${command}`,
+      });
     } catch (error) {
-      setStatusMsg({ type: "danger", text: "Failed to send hardware command." });
+      console.error("onSendHardware error:", error.response?.data || error);
+
+      setStatusMsg({
+        type: "danger",
+        text:
+          error.response?.data?.message ||
+          "Failed to send hardware command.",
+      });
     } finally {
       setSending(false);
     }
@@ -64,6 +114,6 @@ export const useTestingLogic = () => {
     setField,
     command,
     onSendParams,
-    onSendHardware
+    onSendHardware,
   };
 };
