@@ -10,7 +10,7 @@ import pandas as pd
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from ultralytics import YOLO
-from datetime import datetime, timedelta, date 
+from datetime import datetime, timedelta, date
 
 from sensorReadings.arduino_reader import ArduinoReader
 
@@ -32,15 +32,23 @@ ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 115200
 
 LARAVEL_API_URL = "http://127.0.0.1:8000/api/parameters"
+ACTIVE_CONFIG_URL = "http://127.0.0.1:8000/api/configurations/active"
+BATCHES_API_BASE = "http://127.0.0.1:8000/api/batches"
 
 # Auto inference schedule
 INFERENCE_INTERVAL = 1800   # 30 minutes
 INFERENCE_DURATION = 300    # 5 minutes
 
+# Germination detection rules
+germination_saved_for_batch = {}
+GERMINATION_MIN_COUNT = 1
+GERMINATION_CONFIRM_FRAMES = 3
+germination_confirm_counter = 0
+
 # ============================================
 # WATERMARK SETTINGS (CCTV STYLE)
 # ============================================
-START_DATE = date(2026, 3, 27) 
+START_DATE = date(2026, 3, 27)
 LOCATION_TEXT_1 = "Cabuyao City, Laguna"
 LOCATION_TEXT_2 = "Calabarzon"
 
@@ -71,7 +79,8 @@ current_params = {
     "uvDurationMinutes": 120,
 
     "ledStart24": "17:00",
-    "ledEnd24": "06:00"
+    "ledEnd24": "06:00",
+    "ledDuration": 360
 }
 
 params_saved_once = False
@@ -99,7 +108,11 @@ latest_stats = {
     "mode": "IDLE",
     "next_inference_in_sec": 0,
     "remaining_inference_sec": 0,
-    "manual_override": False
+    "manual_override": False,
+    "germination_confirm_counter": 0,
+    "germination_saved": False,
+    "batch": "Batch A",
+    "model_loaded": False
 }
 
 output_frame = None
@@ -113,10 +126,12 @@ max_detected = 0
 print("⏳ Loading YOLO Model...")
 try:
     model = YOLO("imageProcessing/best.pt")
+    latest_stats["model_loaded"] = True
     print("✅ Model Loaded!")
 except Exception as e:
     print(f"❌ Error loading YOLO model: {e}")
     model = None
+    latest_stats["model_loaded"] = False
 
 # ============================================
 # LOAD RANDOM FOREST MODEL
@@ -148,11 +163,13 @@ def safe_float(value, default=0.0):
     except Exception:
         return default
 
+
 def safe_int(value, default=0):
     try:
         return int(value)
     except Exception:
         return default
+
 
 def is_within_program_window(date_planted_str, program_days, now=None):
     try:
@@ -161,11 +178,11 @@ def is_within_program_window(date_planted_str, program_days, now=None):
 
         planted_date = datetime.strptime(date_planted_str, "%Y-%m-%d").date()
         end_date = planted_date + timedelta(days=int(program_days))
-
         return planted_date <= now.date() < end_date
     except Exception as e:
         print(f"⚠️ Program window error: {e}")
         return False
+
 
 def is_led_active(start_str, end_str, now=None):
     try:
@@ -189,6 +206,7 @@ def is_led_active(start_str, end_str, now=None):
         print(f"⚠️ LED schedule error: {e} | start={start_str} end={end_str}")
         return 0
 
+
 def is_uv_active(start_str, duration_mins, now=None):
     try:
         if now is None:
@@ -203,6 +221,7 @@ def is_uv_active(start_str, duration_mins, now=None):
     except Exception as e:
         print(f"⚠️ UV schedule error: {e} | start={start_str} duration={duration_mins}")
         return 0
+
 
 def build_command(params, now=None):
     if now is None:
@@ -240,6 +259,7 @@ def build_command(params, now=None):
 
     return command, uv_on, led_on
 
+
 def send_command_if_changed(force=False, reason=""):
     global last_command_sent, params_saved_once
 
@@ -267,12 +287,13 @@ def send_command_if_changed(force=False, reason=""):
         if ok:
             last_command_sent = command
             return True
-        else:
-            print("❌ Failed to send command to Arduino")
-            return False
+
+        print("❌ Failed to send command to Arduino")
+        return False
     except Exception as e:
         print(f"❌ Exception sending command: {e}")
         return False
+
 
 def build_laravel_payload():
     with lock:
@@ -286,6 +307,7 @@ def build_laravel_payload():
             "Batch": current_params.get("batch", "Batch A")
         }
     return payload
+
 
 def save_to_laravel():
     global last_saved_payload, last_saved_at
@@ -319,28 +341,65 @@ def save_to_laravel():
         if response.ok:
             last_saved_payload = payload
             last_saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
             with lock:
                 latest_stats["last_saved_at"] = last_saved_at
-
             print("✅ Saved to Laravel:", payload)
             return True
-        else:
-            print(f"❌ Laravel save failed: {response.status_code} {response.text}")
-            return False
+
+        print(f"❌ Laravel save failed: {response.status_code} {response.text}")
+        return False
 
     except Exception as e:
         print(f"❌ Error saving to Laravel: {e}")
         return False
-    
+
+
+def save_actual_germination_date(batch_id, detected_at=None):
+    global germination_saved_for_batch
+
+    try:
+        if not batch_id:
+            print("⚠️ No batch_id; cannot save actual germination date.")
+            return False
+
+        if germination_saved_for_batch.get(batch_id, False):
+            return False
+
+        if detected_at is None:
+            detected_at = datetime.now()
+
+        payload = {
+            "actual_germination_date": detected_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        response = requests.patch(
+            f"{BATCHES_API_BASE}/{batch_id}",
+            json=payload,
+            timeout=10
+        )
+
+        if response.ok:
+            germination_saved_for_batch[batch_id] = True
+            print(f"✅ Germination date saved for {batch_id}: {payload['actual_germination_date']}")
+            return True
+
+        print(f"❌ Failed to save germination date: {response.status_code} {response.text}")
+        return False
+
+    except Exception as e:
+        print(f"❌ Error saving actual germination date: {e}")
+        return False
+
+
 def sync_params_from_laravel():
     global current_params, params_saved_once
     print("🔄 Syncing parameters from Laravel database...")
+
     try:
-        response = requests.get("http://127.0.0.1:8000/api/configurations/active", timeout=5)
+        response = requests.get(ACTIVE_CONFIG_URL, timeout=5)
         if response.ok:
             data = response.json()
-            
+
             led_start = data.get("ledStart", "17:00")
             led_dur = safe_int(data.get("ledDuration", 360))
 
@@ -348,7 +407,7 @@ def sync_params_from_laravel():
                 start_dt = datetime.strptime(led_start, "%H:%M")
                 end_dt = start_dt + timedelta(minutes=led_dur)
                 led_end_str = end_dt.strftime("%H:%M")
-            except:
+            except Exception:
                 led_end_str = "06:00"
 
             current_params.update({
@@ -358,16 +417,20 @@ def sync_params_from_laravel():
                 "ambientHum": safe_float(data.get("ambientHum")),
                 "soilMoisture": safe_float(data.get("soilMoisture")),
                 "soilTemp": safe_float(data.get("soilTemp")),
-                "uvStart24": data.get("uvStart", "07:00"),      
-                "uvDurationMinutes": safe_int(data.get("uvDuration", 120)), 
+                "uvStart24": data.get("uvStart", "07:00"),
+                "uvDurationMinutes": safe_int(data.get("uvDuration", 120)),
                 "ledStart24": led_start,
-                "ledEnd24": led_end_str
+                "ledEnd24": led_end_str,
+                "ledDuration": led_dur
             })
+
             params_saved_once = True
             print(f"✅ Sync Complete: Now monitoring {current_params['batch']}")
-            send_command_if_changed(force=True, reason="initial sync")         
+            send_command_if_changed(force=True, reason="initial sync")
+
     except Exception as e:
         print(f"❌ Error syncing from Laravel: {e}")
+
 
 def train_and_get_prediction(data_dict):
     if ml_model is None:
@@ -384,13 +447,13 @@ def train_and_get_prediction(data_dict):
         }])[ML_FEATURES]
 
         print("🔎 Prediction input:", input_df.to_dict(orient="records")[0])
-
         prediction = ml_model.predict(input_df)[0]
         return round(float(prediction), 2)
 
     except Exception as e:
         print(f"❌ Prediction error: {e}")
         return 7.0
+
 
 # ============================================
 # SCHEDULE MONITOR
@@ -404,6 +467,7 @@ def schedule_monitor():
         except Exception as e:
             print(f"⚠️ Schedule monitor error: {e}")
         time.sleep(5)
+
 
 schedule_thread = threading.Thread(target=schedule_monitor, daemon=True)
 schedule_thread.start()
@@ -431,12 +495,12 @@ def update_sensors():
                     latest_stats["ledw"] = s_data.get("ledw", latest_stats["ledw"])
                     latest_stats["tempMode"] = s_data.get("tempMode", latest_stats["tempMode"])
                     latest_stats["humMode"] = s_data.get("humMode", latest_stats["humMode"])
-            else:
-                pass
+
         except Exception as e:
             print(f"⚠️ Sensor update error: {e}")
 
         time.sleep(1)
+
 
 sensor_t = threading.Thread(target=update_sensors, daemon=True)
 sensor_t.start()
@@ -454,6 +518,7 @@ def process_camera():
     global inference_start_time
     global manual_override
     global max_detected
+    global germination_confirm_counter
 
     cap = None
     frame_count = 0
@@ -485,6 +550,12 @@ def process_camera():
                     latest_stats["next_inference_in_sec"] = INFERENCE_INTERVAL
                     latest_stats["remaining_inference_sec"] = 0
                     latest_stats["manual_override"] = manual_override
+                    latest_stats["germination_confirm_counter"] = germination_confirm_counter
+                    latest_stats["germination_saved"] = germination_saved_for_batch.get(
+                        current_params.get("batch", "Batch A"), False
+                    )
+                    latest_stats["batch"] = current_params.get("batch", "Batch A")
+                    latest_stats["model_loaded"] = model is not None
 
                 time.sleep(0.2)
                 continue
@@ -492,8 +563,8 @@ def process_camera():
             if cap is None:
                 print("🚀 Opening camera...")
                 cap = cv2.VideoCapture(0)
-                cap.set(3, W)
-                cap.set(4, H)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, W)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
                 time.sleep(0.5)
 
                 if not cap.isOpened():
@@ -511,6 +582,7 @@ def process_camera():
             final_frame = frame.copy()
             current_time = time.time()
 
+            # AUTO MODE scheduler
             if not manual_override:
                 if (not is_processing) and ((current_time - last_inference_end) >= INFERENCE_INTERVAL):
                     print("🟢 Starting scheduled inference for 5 minutes...")
@@ -520,13 +592,14 @@ def process_camera():
                     last_annotated_frame = None
                     last_masked_frame = None
                     max_detected = 0
+                    germination_confirm_counter = 0
 
                 if is_processing and inference_start_time is not None:
                     if (current_time - inference_start_time) >= INFERENCE_DURATION:
                         print("🔴 Stopping scheduled inference.")
                         print("💾 Saving data after inference cycle...")
                         save_to_laravel()
-                        
+
                         max_detected = 0
                         is_processing = False
                         inference_start_time = None
@@ -534,7 +607,9 @@ def process_camera():
                         frame_count = 0
                         last_annotated_frame = None
                         last_masked_frame = None
+                        germination_confirm_counter = 0
 
+            # DETECTION
             if is_processing and model is not None:
                 frame_count += 1
 
@@ -548,10 +623,23 @@ def process_camera():
 
                     count = len(results[0].boxes)
                     max_detected = max(max_detected, count)
+                    batch_id = current_params.get("batch", "Batch A")
+
+                    if count >= GERMINATION_MIN_COUNT:
+                        with lock:
+                            germination_confirm_counter += 1
+                    else:
+                        with lock:
+                            germination_confirm_counter = 0
+
+                    if germination_confirm_counter >= GERMINATION_CONFIRM_FRAMES:
+                        save_actual_germination_date(batch_id)
 
                     current_conf = (
-                        round((sum(box.conf.item() for box in results[0].boxes) / count) * 100, 1)
-                        if count > 0 else 0
+                        round(
+                            (sum(box.conf.item() for box in results[0].boxes) / count) * 100,
+                            1
+                        ) if count > 0 else 0
                     )
 
                     annotated_frame = frame.copy()
@@ -576,6 +664,9 @@ def process_camera():
                     with lock:
                         latest_stats["pechay_detected"] = count
                         latest_stats["confidenceScore"] = current_conf
+                        latest_stats["germination_confirm_counter"] = germination_confirm_counter
+                        latest_stats["germination_saved"] = germination_saved_for_batch.get(batch_id, False)
+
                 else:
                     annotated_frame = last_annotated_frame if last_annotated_frame is not None else frame
                     masked_frame = last_masked_frame if last_masked_frame is not None else np.zeros_like(frame)
@@ -585,45 +676,50 @@ def process_camera():
             else:
                 frame_count = 0
                 final_frame = frame
+                with lock:
+                    germination_confirm_counter = 0
+                    latest_stats["pechay_detected"] = 0
+                    latest_stats["confidenceScore"] = 0
+                    latest_stats["germination_confirm_counter"] = 0
 
-            if final_frame is not None:
-                now = datetime.now()
-                current_date_str = now.strftime("%m-%d-%Y")
-                current_time_str = now.strftime("%I:%M:%S %p")
-                
-                current_date = now.date()
-                days_passed = (current_date - START_DATE).days
-                day_text = f"Day {max(0, days_passed)}"
-                
-                font = cv2.FONT_HERSHEY_PLAIN
-                font_scale = 1.0  
-                color = (255, 255, 255)
-                thickness = 1
-                shadow_color = (0, 0, 0)
-                
-                x_start = 50
-                y_start = H - 120 
-                line_spacing = 18 
-                
-                lines = [
-                    day_text,
-                    current_date_str,
-                    f"Time: {current_time_str}"
-                ]
-                
-                for i, line in enumerate(lines):
-                    y_pos = y_start + (i * line_spacing)
-                    cv2.putText(final_frame, line, (x_start + 1, y_pos), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start - 1, y_pos), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos + 1), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos - 1), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos), font, font_scale, color, thickness)
+            # WATERMARK
+            now_dt = datetime.now()
+            current_date_str = now_dt.strftime("%m-%d-%Y")
+            current_time_str = now_dt.strftime("%I:%M:%S %p")
+            days_passed = (now_dt.date() - START_DATE).days
+            day_text = f"Day {max(0, days_passed)}"
+
+            font = cv2.FONT_HERSHEY_PLAIN
+            font_scale = 1.0
+            color = (255, 255, 255)
+            thickness = 1
+            shadow_color = (0, 0, 0)
+
+            x_start = 50
+            y_start = H - 120
+            line_spacing = 18
+
+            lines = [
+                day_text,
+                current_date_str,
+                f"Time: {current_time_str}"
+            ]
+
+            for i, line in enumerate(lines):
+                y_pos = y_start + (i * line_spacing)
+                cv2.putText(final_frame, line, (x_start + 1, y_pos), font, font_scale, shadow_color, thickness + 1)
+                cv2.putText(final_frame, line, (x_start - 1, y_pos), font, font_scale, shadow_color, thickness + 1)
+                cv2.putText(final_frame, line, (x_start, y_pos + 1), font, font_scale, shadow_color, thickness + 1)
+                cv2.putText(final_frame, line, (x_start, y_pos - 1), font, font_scale, shadow_color, thickness + 1)
+                cv2.putText(final_frame, line, (x_start, y_pos), font, font_scale, color, thickness)
 
             with lock:
                 latest_stats["is_processing"] = is_processing
                 latest_stats["camera_active"] = camera_active
                 latest_stats["view_mode"] = view_mode
                 latest_stats["manual_override"] = manual_override
+                latest_stats["batch"] = current_params.get("batch", "Batch A")
+                latest_stats["model_loaded"] = model is not None
 
                 if not camera_active:
                     latest_stats["mode"] = "CAMERA_OFF"
@@ -654,11 +750,15 @@ def process_camera():
 
         time.sleep(0.005)
 
+
+# ============================================
+# START CAMERA THREAD
+# ============================================
 camera_thread = threading.Thread(target=process_camera, daemon=True)
 camera_thread.start()
 
 # ============================================
-# FLASK ROUTES
+# ROUTES
 # ============================================
 @app.route("/video_feed")
 def video_feed():
@@ -693,14 +793,29 @@ def video_feed():
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
+
 @app.route("/status")
 def get_status():
     with lock:
         return jsonify(dict(latest_stats))
 
+
 @app.route("/toggle_inference", methods=["POST"])
 def toggle_inference():
-    global is_processing, manual_override, inference_start_time, last_inference_end, max_detected
+    global is_processing, manual_override, inference_start_time, last_inference_end
+    global max_detected, germination_confirm_counter
+
+    if not camera_active:
+        return jsonify({
+            "status": "error",
+            "message": "Camera is OFF. Turn on camera first."
+        }), 400
+
+    if model is None:
+        return jsonify({
+            "status": "error",
+            "message": "YOLO model not loaded."
+        }), 500
 
     manual_override = True
     is_processing = not is_processing
@@ -708,6 +823,7 @@ def toggle_inference():
     if is_processing:
         inference_start_time = time.time()
         max_detected = 0
+        germination_confirm_counter = 0
         print("Manual inference started.")
     else:
         print("🔴 Manual inference stopped.")
@@ -716,21 +832,35 @@ def toggle_inference():
         inference_start_time = None
         last_inference_end = time.time()
         max_detected = 0
+        germination_confirm_counter = 0
+
+    with lock:
+        latest_stats["manual_override"] = manual_override
+        latest_stats["is_processing"] = is_processing
+        latest_stats["germination_confirm_counter"] = germination_confirm_counter
 
     return jsonify({
         "status": is_processing,
         "manual_override": manual_override
     })
 
+
 @app.route("/set_auto_mode", methods=["POST"])
 def set_auto_mode():
-    global manual_override, is_processing, inference_start_time, last_inference_end, max_detected
+    global manual_override, is_processing, inference_start_time, last_inference_end
+    global max_detected, germination_confirm_counter
 
     manual_override = False
     is_processing = False
     inference_start_time = None
     last_inference_end = time.time()
     max_detected = 0
+    germination_confirm_counter = 0
+
+    with lock:
+        latest_stats["manual_override"] = False
+        latest_stats["mode"] = "IDLE"
+        latest_stats["germination_confirm_counter"] = 0
 
     print("🔄 Returned to AUTO mode.")
 
@@ -739,9 +869,11 @@ def set_auto_mode():
         "manual_override": manual_override
     })
 
+
 @app.route("/toggle_camera", methods=["POST"])
 def toggle_camera():
-    global camera_active, is_processing, inference_start_time, manual_override, max_detected
+    global camera_active, is_processing, inference_start_time, manual_override
+    global max_detected, germination_confirm_counter
 
     camera_active = not camera_active
 
@@ -750,14 +882,23 @@ def toggle_camera():
         inference_start_time = None
         manual_override = False
         max_detected = 0
+        germination_confirm_counter = 0
 
+        with lock:
+            latest_stats["germination_confirm_counter"] = 0
+            latest_stats["pechay_detected"] = 0
+            latest_stats["confidenceScore"] = 0
+
+    print(f"Camera toggled: {camera_active}")
     return jsonify({"status": camera_active})
+
 
 @app.route("/toggle_view", methods=["POST"])
 def toggle_view():
     global view_mode
     view_mode = "masked" if view_mode == "normal" else "normal"
     return jsonify({"status": "success", "mode": view_mode})
+
 
 @app.route("/capture_image", methods=["POST"])
 def capture_image():
@@ -774,25 +915,28 @@ def capture_image():
 
     return jsonify({"status": "success", "file": filename})
 
+
 @app.route("/api/update_params", methods=["POST"])
 def update_params():
     global current_params, params_saved_once
+    global germination_saved_for_batch, germination_confirm_counter
 
     try:
         data = request.json if request.is_json else {}
 
-        batch_name = data.get("batch", "Batch A")
-        
+        old_batch = str(current_params.get("batch", "Batch A")).strip()
+        batch_name = str(data.get("batch", "Batch A")).strip()
+
         amb_temp = safe_float(data.get("ambientTemp"), 25.0)
-        amb_hum  = safe_float(data.get("ambientHum"), 70.0)
-        s_moist  = safe_float(data.get("soilMoisture"), 35.0)
-        s_temp   = safe_float(data.get("soilTemp"), 22.0)
-        
+        amb_hum = safe_float(data.get("ambientHum"), 70.0)
+        s_moist = safe_float(data.get("soilMoisture"), 35.0)
+        s_temp = safe_float(data.get("soilTemp"), 22.0)
+
         uv_start = data.get("uvStart", "07:00")
-        uv_dur   = safe_int(data.get("uvDuration"), 120)
-        
+        uv_dur = safe_int(data.get("uvDuration"), 120)
+
         led_start = data.get("ledStart", "17:00")
-        led_dur   = safe_int(data.get("ledDuration"), 360)
+        led_dur = safe_int(data.get("ledDuration"), 360)
 
         try:
             start_dt = datetime.strptime(led_start, "%H:%M")
@@ -802,7 +946,20 @@ def update_params():
             led_end_str = "23:59"
 
         if uv_dur < 1 or uv_dur > 720:
-            return jsonify({"status": "error", "message": "UV duration must be 1-720 mins."}), 400
+            return jsonify({
+                "status": "error",
+                "message": "UV duration must be 1-720 mins."
+            }), 400
+
+        batch_changed = (old_batch != batch_name)
+
+        if batch_changed:
+            with lock:
+                germination_confirm_counter = 0
+            print(f"🔄 Batch changed: {old_batch} -> {batch_name}")
+
+        if batch_name not in germination_saved_for_batch:
+            germination_saved_for_batch[batch_name] = False
 
         current_params.update({
             "batch": batch_name,
@@ -827,10 +984,12 @@ def update_params():
         return jsonify({
             "status": "success",
             "message": f"Parameters for {batch_name} updated!",
+            "batch_changed": batch_changed,
             "command": command,
             "uv": uv_on,
             "led": led_on,
             "sent_to_arduino": sent,
+            "germination_saved_for_batch": germination_saved_for_batch.get(batch_name, False),
             "params": current_params
         })
 
@@ -841,11 +1000,11 @@ def update_params():
             "message": str(e)
         }), 500
 
+
 @app.route("/api/testing_command", methods=["POST"])
 def testing_command():
     try:
         data = request.json or {}
-
         command = data.get("command")
 
         if not command:
@@ -867,7 +1026,6 @@ def testing_command():
                 "message": "Failed to send to Arduino"
             }), 500
 
-        # Optional: update UI state
         with lock:
             latest_stats["mode"] = "TESTING"
 
@@ -884,14 +1042,16 @@ def testing_command():
             "message": str(e)
         }), 500
 
+
 @app.route("/api/sequential_shutdown", methods=["POST"])
 def sequential_shutdown():
-    global manual_override, is_processing, inference_start_time, max_detected
+    global manual_override, is_processing, inference_start_time, max_detected, germination_confirm_counter
 
     try:
         is_processing = False
         inference_start_time = None
         max_detected = 0
+        germination_confirm_counter = 0
         manual_override = True
 
         ok = sensor.send_command("SEQ_SHUTDOWN")
@@ -905,6 +1065,7 @@ def sequential_shutdown():
         with lock:
             latest_stats["manual_override"] = True
             latest_stats["mode"] = "MANUAL"
+            latest_stats["germination_confirm_counter"] = 0
 
         return jsonify({
             "status": "success",
@@ -918,6 +1079,7 @@ def sequential_shutdown():
             "status": "error",
             "message": str(e)
         }), 500
+
 
 @app.route("/api/hardware_auto", methods=["POST"])
 def hardware_auto():
@@ -950,6 +1112,7 @@ def hardware_auto():
             "message": str(e)
         }), 500
 
+
 @app.route("/api/current_params", methods=["GET"])
 def get_current_params():
     now = datetime.now()
@@ -968,6 +1131,7 @@ def get_current_params():
         "command": command
     })
 
+
 @app.route("/api/resend_params", methods=["POST"])
 def resend_params():
     try:
@@ -978,7 +1142,6 @@ def resend_params():
             }), 400
 
         sent = send_command_if_changed(force=True, reason="manual resend")
-
         now = datetime.now()
         command, uv_on, led_on = build_command(current_params, now)
 
@@ -996,12 +1159,13 @@ def resend_params():
             "message": str(e)
         }), 500
 
+
 @app.route("/api/predict", methods=["POST"])
 def predict_germination():
     try:
-        data = request.json
+        data = request.json or {}
         predicted_days = train_and_get_prediction(data)
-        
+
         return jsonify({
             "status": "success",
             "predicted_days": predicted_days
@@ -1009,9 +1173,10 @@ def predict_germination():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 # ============================================
 # MAIN
 # ============================================
 if __name__ == "__main__":
-    sync_params_from_laravel() 
+    sync_params_from_laravel()
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

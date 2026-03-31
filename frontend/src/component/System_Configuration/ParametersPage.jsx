@@ -9,14 +9,14 @@ export default function ParametersPage() {
   const initialValues = useMemo(
     () => ({
       batch: "",
-      ambientTemp: 20,
-      ambientHum: 50,
-      soilMoisture: 60,
-      soilTemp: 25,
-      uvStart: "07:00",
-      uvDuration: 90,
-      ledStart: "18:00",
-      ledDuration: 90,
+      ambientTemp: "",
+      ambientHum: "",
+      soilMoisture: "",
+      soilTemp: "",
+      uvStart: "",
+      uvDuration: "",
+      ledStart: "",
+      ledDuration: "",
     }),
     []
   );
