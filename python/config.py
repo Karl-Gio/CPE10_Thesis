@@ -8,8 +8,9 @@ DATASET_FOLDER = "CapturedImage"
 
 ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 115200
-
+    
 LARAVEL_API_URL = "http://127.0.0.1:8000/api/parameters"
+LARAVEL_UPDATE_GERMINATION_DATE_URL = "http://127.0.0.1:8000/api/batches/latest/germination-date"
 TESTING_VALUES_API_URL = "http://127.0.0.1:8000/api/testing-values"
 ACTIVE_CONFIG_URL = "http://127.0.0.1:8000/api/configurations/active"
 BATCHES_API_BASE = "http://127.0.0.1:8000/api/batches"

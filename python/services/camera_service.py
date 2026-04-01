@@ -188,8 +188,6 @@ class CameraService:
                 now_dt = datetime.now()
                 current_date_str = now_dt.strftime("%m-%d-%Y")
                 current_time_str = now_dt.strftime("%I:%M:%S %p")
-                days_passed = (now_dt.date() - START_DATE).days
-                day_text = f"Day {max(0, days_passed)}"
 
                 font = cv2.FONT_HERSHEY_PLAIN
                 font_scale = 1.0
@@ -197,12 +195,11 @@ class CameraService:
                 thickness = 1
                 shadow_color = (0, 0, 0)
 
-                x_start = 50
-                y_start = H - 120
+                x_start = 40
+                y_start = H - 100
                 line_spacing = 18
 
                 lines = [
-                    day_text,
                     current_date_str,
                     f"Time: {current_time_str}"
                 ]

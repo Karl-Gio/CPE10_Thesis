@@ -19,6 +19,7 @@ from config import (
     DEFAULT_PARAMS,
     DEFAULT_STATS,
     TESTING_VALUES_API_URL,
+    LARAVEL_UPDATE_GERMINATION_DATE_URL,
 )
 from sensorReadings.arduino_reader import ArduinoReader
 from .camera_service import CameraService
@@ -345,6 +346,10 @@ class SystemService:
 
             batch = str(session_data.get("batch", "Batch A")).strip()
 
+            raw_interval = (duration_minutes * 60) // 30
+            interval_seconds = max(5, int(round(raw_interval / 5) * 5))
+            self.testing_interval_seconds = interval_seconds
+
             self.testing_started_at = datetime.now()
             self.testing_ends_at = self.testing_started_at + timedelta(minutes=duration_minutes)
             self.testing_active = True
@@ -355,11 +360,13 @@ class SystemService:
                 self.latest_stats["testing_batch"] = batch
                 self.latest_stats["testing_started_at"] = self.testing_started_at.strftime("%Y-%m-%d %H:%M:%S")
                 self.latest_stats["testing_ends_at"] = self.testing_ends_at.strftime("%Y-%m-%d %H:%M:%S")
+                self.latest_stats["testing_interval_seconds"] = interval_seconds
 
             print("====================================")
             print("🧪 TESTING SESSION STARTED")
             print(f"📦 Batch: {batch}")
             print(f"⏱ Duration: {duration_minutes} minute(s)")
+            print(f"📡 Logging interval: {interval_seconds} second(s) (~30 logs total)")
             print(f"🕐 Start: {self.testing_started_at.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"🕐 End:   {self.testing_ends_at.strftime('%Y-%m-%d %H:%M:%S')}")
             print("====================================")
@@ -371,9 +378,10 @@ class SystemService:
                 except Exception as e:
                     print(f"⚠️ Testing session loop error: {e}")
 
-                # collect/save once per minute
                 slept = 0
-                while self.testing_active and slept < self.testing_interval_seconds:
+                while self.testing_active and slept < interval_seconds:
+                    if datetime.now() >= self.testing_ends_at:
+                        break
                     time.sleep(1)
                     slept += 1
 
@@ -410,13 +418,20 @@ class SystemService:
                     "message": "Duration must be at least 1 minute."
                 }, 400
 
-            # Optional immediate hardware command from React toggles
-            # Format: T<uv,led,peltier,heater,intakeFan,exhaustFan,buzzer,pump>
+            ambient_temp = self.safe_float(data.get("ambient_temp"))
+            ambient_hum = self.safe_float(data.get("ambient_humidity"))
+            soil_moisture = self.safe_float(data.get("soil_moisture"))
+            soil_temp = self.safe_float(data.get("soil_temp"))
+            uv = self.safe_int(data.get("uv"))
+            led = self.safe_int(data.get("led"))
+
             command = (
-                f"T<"
-                f"{self.safe_int(data.get('uv'))},"
-                f"{self.safe_int(data.get('led'))},"
-                f"0,0,0,0,0,0>"
+                f"<{ambient_temp},"
+                f"{ambient_hum},"
+                f"{soil_moisture},"
+                f"{soil_temp},"
+                f"{uv},"
+                f"{led}>"
             )
 
             ok = self.sensor.send_command(command)
@@ -485,31 +500,20 @@ class SystemService:
             "interval_seconds": self.testing_interval_seconds
         }
 
-    def save_actual_germination_date(self, batch_id, detected_at=None):
+    def save_actual_germination_date(self, _unused=None):
         try:
-            if not batch_id:
-                print("⚠️ No batch_id; cannot save actual germination date.")
-                return False
-
-            if self.germination_saved_for_batch.get(batch_id, False):
-                return False
-
-            if detected_at is None:
-                detected_at = datetime.now()
-
             payload = {
-                "actual_germination_date": detected_at.strftime("%Y-%m-%d %H:%M:%S")
+                "germinated": True
             }
 
             response = requests.patch(
-                f"{BATCHES_API_BASE}/{batch_id}",
+                LARAVEL_UPDATE_GERMINATION_DATE_URL,
                 json=payload,
                 timeout=10
             )
 
             if response.ok:
-                self.germination_saved_for_batch[batch_id] = True
-                print(f"✅ Germination date saved for {batch_id}: {payload['actual_germination_date']}")
+                print("✅ Germination confirmed and saved by Laravel")
                 return True
 
             print(f"❌ Failed to save germination date: {response.status_code} {response.text}")
@@ -799,7 +803,21 @@ class SystemService:
 
     def testing_command(self, data):
         try:
-            command = data.get("command")
+            ambient_temp = self.safe_float(data.get("ambient_temp"))
+            ambient_hum = self.safe_float(data.get("ambient_humidity"))
+            soil_moisture = self.safe_float(data.get("soil_moisture"))
+            soil_temp = self.safe_float(data.get("soil_temp"))
+            uv = self.safe_int(data.get("uv"))
+            led = self.safe_int(data.get("led"))
+
+            command = (
+                f"<{ambient_temp},"
+                f"{ambient_hum},"
+                f"{soil_moisture},"
+                f"{soil_temp},"
+                f"{uv},"
+                f"{led}>"
+            )
 
             if not command:
                 return {
@@ -893,6 +911,61 @@ class SystemService:
 
         except Exception as e:
             print(f"❌ /api/hardware_auto error: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }, 500
+        
+    def manual_hardware(self, data):
+        try:
+            uv = self.safe_int(data.get("uv"))
+            led = self.safe_int(data.get("led"))
+            peltier = self.safe_int(data.get("peltier"))
+            heater = self.safe_int(data.get("heater"))
+            intake_fan = self.safe_int(data.get("intakeFan"))
+            exhaust_fan = self.safe_int(data.get("exhaustFan"))
+            buzzer = self.safe_int(data.get("buzzer"))
+            pump = self.safe_int(data.get("pump"))
+
+            command = (
+                f"T<{uv},"
+                f"{led},"
+                f"{peltier},"
+                f"{heater},"
+                f"{intake_fan},"
+                f"{exhaust_fan},"
+                f"{buzzer},"
+                f"{pump}>"
+            )
+
+            print("====================================")
+            print("🎛 MANUAL HARDWARE COMMAND RECEIVED")
+            print(f"📦 Command: {command}")
+            print("====================================")
+
+            ok = self.sensor.send_command(command)
+
+            if not ok:
+                return {
+                    "status": "error",
+                    "message": "Failed to send manual hardware command to Arduino."
+                }, 500
+
+            with self.lock:
+                self.latest_stats["mode"] = "MANUAL"
+                self.latest_stats["uv"] = "ON" if uv else "OFF"
+                self.latest_stats["ledw"] = "ON" if led else "OFF"
+                self.latest_stats["pump"] = "ON" if pump else "OFF"
+
+            return {
+                "status": "success",
+                "message": "Manual hardware command sent successfully.",
+                "command": command,
+                "sent": True
+            }, 200
+
+        except Exception as e:
+            print(f"❌ manual_hardware error: {e}")
             return {
                 "status": "error",
                 "message": str(e)

@@ -36,22 +36,42 @@ class BatchController extends Controller
         ], 201);
     }
 
-   public function update(Request $request, $batch_id)
-{
-    $batch = Batch::where('batch_id', $batch_id)->firstOrFail();
+    public function update(Request $request, $batch_id)
+    {
+        $batch = Batch::where('batch_id', $batch_id)->firstOrFail();
 
-    $validated = $request->validate([
-        'actual_germination_date' => 'required|date',
-    ]);
+        $validated = $request->validate([
+            'actual_germination_date' => 'required|date',
+        ]);
 
-    // Save only once
-    if (!$batch->actual_germination_date) {
-        $batch->update($validated);
+        // Save only once
+        if (!$batch->actual_germination_date) {
+            $batch->update($validated);
+        }
+
+        return response()->json([
+            'message' => 'Germination date processed!',
+            'data'    => $batch->fresh(),
+        ]);
     }
 
-    return response()->json([
-        'message' => 'Germination date processed!',
-        'data'    => $batch->fresh(),
-    ]);
-}
+    public function updateLatestGerminationDate(Request $request)
+    {
+        $validated = $request->validate([
+            'germinated' => 'required|boolean',
+        ]);
+
+        $batch = Batch::orderByDesc('created_at')->firstOrFail();
+
+        if ($validated['germinated'] && !$batch->actual_germination_date) {
+            $batch->update([
+                'actual_germination_date' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Latest batch germination date processed!',
+            'data' => $batch->fresh(),
+        ]);
+    }
 }

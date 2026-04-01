@@ -14,7 +14,7 @@ CORS(app)
 # ============================================
 # CONFIG
 # ============================================
-W, H = 1920, 1080
+W, H = 3840, 2160
 CONFIDENCE_THRESHOLD = 0.15
 SKIP_FRAMES = 3
 DATASET_FOLDER = "CapturedImage"
@@ -82,7 +82,8 @@ def save_actual_germination_date(batch_id):
         return
 
     germination_saved_for_batch[batch_id] = True
-    print(f"✅ Germination confirmed for {batch_id} at {datetime.datetime.now()}")
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"✅ Germination confirmed for {batch_id} at {now}")
 
 def process_camera():
     global output_frame
