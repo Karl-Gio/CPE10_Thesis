@@ -14,19 +14,21 @@ export function SideBar() {
     const token = localStorage.getItem("token");
 
     try {
-      await axios.post(
-        "http://localhost:8000/api/logout",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (token) {
+        await axios.post(
+          "http://localhost:8000/api/logout",
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
     } catch (error) {
       console.error("Logout error:", error);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/");
     }
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
-  };
+};
 
   const linkStyle = ({ isActive }) => ({
     display: "block",

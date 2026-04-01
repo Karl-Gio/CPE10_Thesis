@@ -28,12 +28,14 @@ export default function TestingPage() {
   const {
     values,
     sending,
+    shutdownBusy,
     statusMsg,
     setStatusMsg,
     setField,
     command,
     onSendParams,
-    onSendHardware
+    onSendHardware,
+    onSequentialShutdown
   } = useTestingLogic();
 
   return (
@@ -63,14 +65,26 @@ export default function TestingPage() {
                     Input values for batch and environmental setup.
                   </small>
                 </div>
-                <Button
-                  variant="success"
-                  className="px-4 rounded-pill"
-                  onClick={onSendParams}
-                  disabled={sending}
-                >
-                  {sending ? "Sending..." : "Send Parameters"}
-                </Button>
+
+                <div className="d-flex gap-2">
+                  <Button
+                    variant="outline-danger"
+                    className="px-4 rounded-pill"
+                    onClick={onSequentialShutdown}
+                    disabled={shutdownBusy}
+                  >
+                    {shutdownBusy ? "Sending..." : "Sequential Shutdown"}
+                  </Button>
+
+                  <Button
+                    variant="success"
+                    className="px-4 rounded-pill"
+                    onClick={onSendParams}
+                    disabled={sending}
+                  >
+                    {sending ? "Sending..." : "Send Parameters"}
+                  </Button>
+                </div>
               </div>
 
               <Row className="g-3">
