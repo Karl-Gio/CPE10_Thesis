@@ -100,6 +100,11 @@ def create_routes(service):
     def hardware_auto():
         payload, code = service.hardware_auto()
         return jsonify(payload), code
+    
+    @bp.route("/api/manual-hardware", methods=["POST"])
+    def manual_hardware():
+        payload, code = service.manual_hardware(request.json or {})
+        return jsonify(payload), code
 
     @bp.route("/api/current_params", methods=["GET"])
     def get_current_params():
