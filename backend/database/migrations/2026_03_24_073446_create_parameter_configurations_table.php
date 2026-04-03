@@ -11,27 +11,24 @@ return new class extends Migration
         Schema::create('parameter_configurations', function (Blueprint $table) {
             $table->id();
 
-            // Owner
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 
-            // Current batch
-            $table->string('batch')->default('Batch A');
+            $table->foreignId('batch_id')
+                ->nullable()
+                ->constrained('batches')
+                ->nullOnDelete();
 
-            // Sensor thresholds
-            $table->decimal('ambientTemp', 8, 2)->nullable();
-            $table->decimal('ambientHum', 8, 2)->nullable();
-            $table->decimal('soilMoisture', 8, 2)->nullable();
-            $table->decimal('soilTemp', 8, 2)->nullable();
+            $table->decimal('ambient_temp', 8, 2)->nullable();
+            $table->decimal('humidity', 8, 2)->nullable();
+            $table->decimal('soil_moisture', 8, 2)->nullable();
+            $table->decimal('soil_temp', 8, 2)->nullable();
 
-            // UV schedule
-            $table->string('uvStart')->default('07:00');
-            $table->integer('uvDuration')->default(90);
+            $table->string('uv_start')->default('07:00');
+            $table->integer('uv_duration')->default(90);
 
-            // LED schedule
-            $table->string('ledStart')->default('18:00');
-            $table->integer('ledDuration')->default(360);
+            $table->string('led_start')->default('18:00');
+            $table->integer('led_duration')->default(360);
 
-            // Status
             $table->boolean('is_active')->default(true);
 
             $table->timestamps();

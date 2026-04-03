@@ -2,45 +2,50 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Batch;
-use Illuminate\Http\Request;
 use App\Models\Parameter;
 use App\Models\ParameterConfiguration;
+use Illuminate\Http\Request;
 
 class BatchController extends Controller
 {
     public function index()
     {
-        return response()->json(Batch::all());
+        return response()->json(
+            Batch::with('user')
+                ->latest()
+                ->get()
+        );
     }
 
-    public function show($batch_id)
+    public function show($batchId)
     {
-        $batch = Batch::where('batch_id', $batch_id)->firstOrFail();
+        $batch = Batch::with('user')->where('batch_id', $batchId)->firstOrFail();
         return response()->json($batch);
     }
 
     public function store(Request $request)
     {
+        $user = $request->user();
+
         $validated = $request->validate([
-            'batch_id'       => 'required|unique:batches,batch_id',
-            'date_planted'   => 'required|date',
-            'predicted_days' => 'required|numeric',
-            'latency_ms'     => 'nullable|integer',
+            'batch_id' => 'required|unique:batches,batch_id',
+            'date_planted' => 'required|date',
+            'predicted_days' => 'nullable|numeric',
+            'latency_ms' => 'nullable|integer',
         ]);
 
-        $batch = Batch::create($validated);
+        $batch = $user->batches()->create($validated);
 
         return response()->json([
             'message' => 'Batch saved successfully!',
-            'data'    => $batch,
+            'data' => $batch,
         ], 201);
     }
 
-    public function update(Request $request, $batch_id)
+    public function update(Request $request, $batchId)
     {
-        $batch = Batch::where('batch_id', $batch_id)->firstOrFail();
+        $batch = Batch::where('batch_id', $batchId)->firstOrFail();
 
         $validated = $request->validate([
             'actual_germination_date' => 'required|date',
@@ -52,7 +57,7 @@ class BatchController extends Controller
 
         return response()->json([
             'message' => 'Germination date processed!',
-            'data'    => $batch->fresh(),
+            'data' => $batch->fresh(),
         ]);
     }
 
@@ -62,7 +67,7 @@ class BatchController extends Controller
             'germinated' => 'required|boolean',
         ]);
 
-        $batch = Batch::orderByDesc('created_at')->firstOrFail();
+        $batch = Batch::latest()->firstOrFail();
 
         if ($validated['germinated'] && !$batch->actual_germination_date) {
             $batch->update([
@@ -76,13 +81,15 @@ class BatchController extends Controller
         ]);
     }
 
-    public function monitoring($batch_id)
+    public function monitoring($batchId)
     {
-        $batch = Batch::where('batch_id', $batch_id)->firstOrFail();
+        $batch = Batch::where('batch_id', $batchId)->firstOrFail();
 
-        $config = ParameterConfiguration::where('batch', $batch_id)->latest()->first();
+        $config = ParameterConfiguration::where('batch_id', $batch->id)
+            ->latest()
+            ->first();
 
-        $parameters = Parameter::where('Batch', $batch_id)
+        $parameters = Parameter::where('batch_id', $batch->id)
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -99,37 +106,37 @@ class BatchController extends Controller
             ]);
         }
 
-        $ambientValues = $parameters->pluck('Ambient_Temperature')
-            ->map(fn($v) => (float) $v)
+        $ambientValues = $parameters->pluck('ambient_temp')
+            ->map(fn ($v) => (float) $v)
             ->values()
             ->all();
 
-        $humidityValues = $parameters->pluck('Relative_Humidity')
-            ->map(fn($v) => (float) $v)
+        $humidityValues = $parameters->pluck('humidity')
+            ->map(fn ($v) => (float) $v)
             ->values()
             ->all();
 
-        $soilTempValues = $parameters->pluck('Soil_Temperature')
-            ->map(fn($v) => (float) $v)
+        $soilTempValues = $parameters->pluck('soil_temp')
+            ->map(fn ($v) => (float) $v)
             ->values()
             ->all();
 
-        $soilMoistureValues = $parameters->pluck('Soil_Moisture')
-            ->map(fn($v) => (float) $v)
+        $soilMoistureValues = $parameters->pluck('soil_moisture')
+            ->map(fn ($v) => (float) $v)
             ->values()
             ->all();
 
-        $ambientTest = $this->oneSampleTTest($ambientValues, (float) $config->ambientTemp);
-        $humidityTest = $this->oneSampleTTest($humidityValues, (float) $config->ambientHum);
-        $soilTempTest = $this->oneSampleTTest($soilTempValues, (float) $config->soilTemp);
-        $soilMoistureTest = $this->oneSampleTTest($soilMoistureValues, (float) $config->soilMoisture);
+        $ambientTest = $this->oneSampleTTest($ambientValues, (float) $config->ambient_temp);
+        $humidityTest = $this->oneSampleTTest($humidityValues, (float) $config->humidity);
+        $soilTempTest = $this->oneSampleTTest($soilTempValues, (float) $config->soil_temp);
+        $soilMoistureTest = $this->oneSampleTTest($soilMoistureValues, (float) $config->soil_moisture);
 
         $pValues = collect([
             $ambientTest['p_value'],
             $humidityTest['p_value'],
             $soilTempTest['p_value'],
             $soilMoistureTest['p_value'],
-        ])->filter(fn($p) => $p !== null)->values();
+        ])->filter(fn ($p) => $p !== null)->values();
 
         $overallPValue = $pValues->isNotEmpty()
             ? round((float) $pValues->avg(), 6)
@@ -137,21 +144,20 @@ class BatchController extends Controller
 
         $overallInterpretation = $this->interpretPValue($overallPValue);
 
-        $data = $parameters->map(function ($p) use ($config) {
-            $varianceTemp = abs((float) $p->Ambient_Temperature - (float) $config->ambientTemp);
-            $varianceHum = abs((float) $p->Relative_Humidity - (float) $config->ambientHum);
-            $varianceSoilTemp = abs((float) $p->Soil_Temperature - (float) $config->soilTemp);
-            $varianceSoilMoist = abs((float) $p->Soil_Moisture - (float) $config->soilMoisture);
+        $history = $parameters->map(function ($p) use ($config) {
+            $varianceTemp = abs((float) $p->ambient_temp - (float) $config->ambient_temp);
+            $varianceHum = abs((float) $p->humidity - (float) $config->humidity);
+            $varianceSoilTemp = abs((float) $p->soil_temp - (float) $config->soil_temp);
+            $varianceSoilMoist = abs((float) $p->soil_moisture - (float) $config->soil_moisture);
 
             return [
                 'timestamp' => $p->created_at,
-                'ambient_temp' => (float) $p->Ambient_Temperature,
-                'humidity' => (float) $p->Relative_Humidity,
-                'soil_temp' => (float) $p->Soil_Temperature,
-                'soil_moisture' => (float) $p->Soil_Moisture,
-                'light' => (float) $p->Light_Intensity,
-                'pechay_count' => (float) $p->Pechay_Count,
-
+                'ambient_temp' => (float) $p->ambient_temp,
+                'humidity' => (float) $p->humidity,
+                'soil_temp' => (float) $p->soil_temp,
+                'soil_moisture' => (float) $p->soil_moisture,
+                'light' => (float) $p->light_intensity,
+                'pechay_count' => (int) $p->pechay_count,
                 'variance' => [
                     'temp' => round($varianceTemp, 6),
                     'humidity' => round($varianceHum, 6),
@@ -165,14 +171,12 @@ class BatchController extends Controller
             'batch_id' => $batch->batch_id,
             'date_planted' => $batch->date_planted,
             'germination_date' => $batch->actual_germination_date,
-
             'target' => [
-                'ambientTemp' => (float) $config->ambientTemp,
-                'humidity' => (float) $config->ambientHum,
-                'soilTemp' => (float) $config->soilTemp,
-                'soilMoisture' => (float) $config->soilMoisture,
+                'ambientTemp' => (float) $config->ambient_temp,
+                'humidity' => (float) $config->humidity,
+                'soilTemp' => (float) $config->soil_temp,
+                'soilMoisture' => (float) $config->soil_moisture,
             ],
-
             'ttest' => [
                 'ambient_temp' => [
                     't_stat' => $ambientTest['t_stat'],
@@ -195,10 +199,9 @@ class BatchController extends Controller
                     'interpretation' => $this->interpretPValue($soilMoistureTest['p_value']),
                 ],
             ],
-
             'overall_p_value' => $overallPValue,
             'overall_interpretation' => $overallInterpretation,
-            'history' => $data,
+            'history' => $history,
         ]);
     }
 

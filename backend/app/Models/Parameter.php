@@ -12,26 +12,27 @@ class Parameter extends Model
     protected $table = 'parameters';
 
     protected $fillable = [
-        'Batch',
-        'Ambient_Temperature',
-        'Relative_Humidity',
-        'Soil_Temperature',
-        'Soil_Moisture',
-        'Light_Intensity',
-        'Pechay_Count',
+        'batch_id',
+        'ambient_temp',
+        'humidity',
+        'soil_temp',
+        'soil_moisture',
+        'light_intensity',
+        'pechay_count',
     ];
 
     protected $casts = [
-        'Ambient_Temperature' => 'float',
-        'Relative_Humidity'   => 'float',
-        'Soil_Temperature'    => 'float',
-        'Soil_Moisture'       => 'float',
-        'Light_Intensity'     => 'float',
-        'Pechay_Count'        => 'integer',
+        'batch_id' => 'integer',
+        'ambient_temp' => 'float',
+        'humidity' => 'float',
+        'soil_temp' => 'float',
+        'soil_moisture' => 'float',
+        'light_intensity' => 'float',
+        'pechay_count' => 'integer',
     ];
 
     public function batch()
     {
-        return $this->belongsTo(Batch::class, 'batch_id', 'batch_id');
+        return $this->belongsTo(Batch::class);
     }
 }

@@ -2,236 +2,238 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Batch;
 use App\Models\Parameter;
 use App\Models\ParameterConfiguration;
 use Illuminate\Http\Request;
 
 class ParameterController extends Controller
 {
-    // =========================================================================
-    // PART 1: SENSOR DATA LOGGING (Galing sa Python / AI Script)
-    // =========================================================================
-
     /**
-     * Kunin ang lahat ng history ng sensor readings (para sa Tables/Charts).
+     * All sensor logs.
      */
     public function index()
     {
         return response()->json(
-            Parameter::orderBy('created_at', 'desc')->get()
+            Parameter::with('batch')
+                ->latest()
+                ->get()
         );
     }
 
     /**
-     * I-save ang sensor data at AI results (Pechay Count).
-     * Ito ang tinatawag ng Python script mo tuwing magla-log.
+     * Save sensor log from Python / AI script.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'Ambient_Temperature' => 'nullable|numeric',
-            'Relative_Humidity'   => 'nullable|numeric',
-            'Soil_Temperature'    => 'nullable|numeric',
-            'Soil_Moisture'       => 'nullable|numeric',
-            'Light_Intensity'     => 'nullable|numeric',
-            'Pechay_Count'        => 'nullable|integer',
-            'Batch'               => 'nullable|string|max:255',
+            'batch_id' => 'required|exists:batches,id',
+            'ambient_temp' => 'nullable|numeric',
+            'humidity' => 'nullable|numeric',
+            'soil_temp' => 'nullable|numeric',
+            'soil_moisture' => 'nullable|numeric',
+            'light_intensity' => 'nullable|numeric',
+            'pechay_count' => 'nullable|integer',
         ]);
 
         $parameter = Parameter::create($validated);
 
         return response()->json([
             'message' => 'Sensor log saved successfully',
-            'data'    => $parameter
+            'data' => $parameter->load('batch'),
         ], 201);
     }
 
     /**
-     * Latest reading para sa dashboard metric cards.
+     * Latest reading for dashboard metric cards.
      */
     public function latest()
     {
-        $latest = Parameter::latest()->first();
+        $latest = Parameter::with('batch')->latest()->first();
 
         if (!$latest) {
             return response()->json([
-                'temp'            => 0,
-                'hum'             => 0,
-                'lux'             => 0,
-                'sMOIST'          => 0,
-                'sTEMP'           => 0,
+                'temp' => 0,
+                'hum' => 0,
+                'lux' => 0,
+                'sMOIST' => 0,
+                'sTEMP' => 0,
                 'pechay_detected' => 0,
-                'batch'           => null,
-                'created_at'      => null,
+                'batch' => null,
+                'batch_id' => null,
+                'created_at' => null,
             ]);
         }
 
         return response()->json([
-            'temp'            => (float) ($latest->Ambient_Temperature ?? 0),
-            'hum'             => (float) ($latest->Relative_Humidity ?? 0),
-            'lux'             => (float) ($latest->Light_Intensity ?? 0),
-            'sMOIST'          => (float) ($latest->Soil_Moisture ?? 0),
-            'sTEMP'           => (float) ($latest->Soil_Temperature ?? 0),
-            'pechay_detected' => (int) ($latest->Pechay_Count ?? 0),
-            'batch'           => $latest->Batch,
-            'created_at'      => $latest->created_at?->format('Y-m-d H:i:s'),
+            'temp' => (float) ($latest->ambient_temp ?? 0),
+            'hum' => (float) ($latest->humidity ?? 0),
+            'lux' => (float) ($latest->light_intensity ?? 0),
+            'sMOIST' => (float) ($latest->soil_moisture ?? 0),
+            'sTEMP' => (float) ($latest->soil_temp ?? 0),
+            'pechay_detected' => (int) ($latest->pechay_count ?? 0),
+            'batch' => $latest->batch?->batch_id,
+            'batch_id' => $latest->batch_id,
+            'created_at' => $latest->created_at?->format('Y-m-d H:i:s'),
         ]);
     }
 
     /**
-     * Trend data para sa dashboard chart.
+     * Trend data for dashboard chart.
      */
-    public function trends()
+    public function trends(Request $request)
     {
-        $rows = Parameter::latest()
-            ->take(20)
+        $validated = $request->validate([
+            'batch_id' => 'nullable|exists:batches,id',
+            'limit' => 'nullable|integer|min:1|max:500',
+        ]);
+
+        $limit = $validated['limit'] ?? 20;
+
+        $query = Parameter::query()->with('batch');
+
+        if (!empty($validated['batch_id'])) {
+            $query->where('batch_id', $validated['batch_id']);
+        }
+
+        $rows = $query->latest()
+            ->take($limit)
             ->get()
             ->sortBy('created_at')
             ->values();
 
         return response()->json([
-            'labels' => $rows->map(function ($row) {
-                return $row->created_at->format('H:i');
-            })->values(),
-
-            'temp' => $rows->map(function ($row) {
-                return (float) ($row->Ambient_Temperature ?? 0);
-            })->values(),
-
-            'humidity' => $rows->map(function ($row) {
-                return (float) ($row->Relative_Humidity ?? 0);
-            })->values(),
-
-            'soilMoisture' => $rows->map(function ($row) {
-                return (float) ($row->Soil_Moisture ?? 0);
-            })->values(),
-
-            'soilTemp' => $rows->map(function ($row) {
-                return (float) ($row->Soil_Temperature ?? 0);
-            })->values(),
-
-            'light' => $rows->map(function ($row) {
-                return (float) ($row->Light_Intensity ?? 0);
-            })->values(),
-
-            'pechayCount' => $rows->map(function ($row) {
-                return (int) ($row->Pechay_Count ?? 0);
-            })->values(),
+            'labels' => $rows->map(fn ($row) => $row->created_at->format('H:i'))->values(),
+            'temp' => $rows->map(fn ($row) => (float) ($row->ambient_temp ?? 0))->values(),
+            'humidity' => $rows->map(fn ($row) => (float) ($row->humidity ?? 0))->values(),
+            'soilMoisture' => $rows->map(fn ($row) => (float) ($row->soil_moisture ?? 0))->values(),
+            'soilTemp' => $rows->map(fn ($row) => (float) ($row->soil_temp ?? 0))->values(),
+            'light' => $rows->map(fn ($row) => (float) ($row->light_intensity ?? 0))->values(),
+            'pechayCount' => $rows->map(fn ($row) => (int) ($row->pechay_count ?? 0))->values(),
+            'batch' => $rows->isNotEmpty() ? $rows->first()->batch?->batch_id : null,
         ]);
     }
 
-    // =========================================================================
-    // PART 2: PARAMETER CONFIGURATION (Galing sa React Settings Page)
-    // =========================================================================
-
     /**
-     * Ibigay ang "Active" na configuration sa React Dashboard.
-     * Kung walang record, ibigay ang "Initial Values" (Defaults).
+     * Active config for current authenticated user.
      */
     public function showActiveConfig(Request $request)
     {
         $user = $request->user();
 
         $activeConfig = $user->parameterConfigurations()
-                             ->where('is_active', true)
-                             ->latest()
-                             ->first();
+            ->with('batch')
+            ->where('is_active', true)
+            ->latest()
+            ->first();
 
         if (!$activeConfig) {
             return response()->json([
-                'batch'         => 'Batch A',
-                'ambientTemp'   => 25.00,
-                'ambientHum'    => 70.00,
-                'soilMoisture'  => 35.00,
-                'soilTemp'      => 22.00,
-                'uvStart'       => '07:00',
-                'uvDuration'    => 90,
-                'ledStart'      => '18:00',
-                'ledDuration'   => 360,
+                'batch_id' => null,
+                'batch' => null,
+                'ambient_temp' => 25.00,
+                'humidity' => 70.00,
+                'soil_moisture' => 35.00,
+                'soil_temp' => 22.00,
+                'uv_start' => '07:00',
+                'uv_duration' => 90,
+                'led_start' => '18:00',
+                'led_duration' => 360,
             ]);
         }
 
         return response()->json([
-            'batch'         => $activeConfig->batch ?? 'Batch A',
-            'ambientTemp'   => (float) $activeConfig->ambientTemp,
-            'ambientHum'    => (float) $activeConfig->ambientHum,
-            'soilMoisture'  => (float) $activeConfig->soilMoisture,
-            'soilTemp'      => (float) $activeConfig->soilTemp,
-            'uvStart'       => $activeConfig->uvStart,
-            'uvDuration'    => (int) $activeConfig->uvDuration,
-            'ledStart'      => $activeConfig->ledStart,
-            'ledDuration'   => (int) $activeConfig->ledDuration,
+            'id' => $activeConfig->id,
+            'batch_id' => $activeConfig->batch_id,
+            'batch' => $activeConfig->batch?->batch_id,
+            'ambient_temp' => (float) $activeConfig->ambient_temp,
+            'humidity' => (float) $activeConfig->humidity,
+            'soil_moisture' => (float) $activeConfig->soil_moisture,
+            'soil_temp' => (float) $activeConfig->soil_temp,
+            'uv_start' => $activeConfig->uv_start,
+            'uv_duration' => (int) $activeConfig->uv_duration,
+            'led_start' => $activeConfig->led_start,
+            'led_duration' => (int) $activeConfig->led_duration,
         ]);
     }
 
     /**
-     * I-save ang bagong configuration at i-deactivate ang luma.
+     * Save new config and deactivate old active ones.
      */
     public function storeConfig(Request $request)
     {
         $validated = $request->validate([
-            'batch'         => 'nullable|string|max:255',
-            'ambientTemp'   => 'required|numeric',
-            'ambientHum'    => 'required|numeric',
-            'soilMoisture'  => 'required|numeric',
-            'soilTemp'      => 'required|numeric',
-            'uvStart'       => 'required|string|max:10',
-            'uvDuration'    => 'required|integer|min:0',
-            'ledStart'      => 'required|string|max:10',
-            'ledDuration'   => 'required|integer|min:0',
+            'batch_id' => 'nullable|exists:batches,id',
+            'ambient_temp' => 'required|numeric',
+            'humidity' => 'required|numeric',
+            'soil_moisture' => 'required|numeric',
+            'soil_temp' => 'required|numeric',
+            'uv_start' => 'required|string|max:10',
+            'uv_duration' => 'required|integer|min:0',
+            'led_start' => 'required|string|max:10',
+            'led_duration' => 'required|integer|min:0',
         ]);
 
         $user = $request->user();
 
         $user->parameterConfigurations()->update([
-            'is_active' => false
+            'is_active' => false,
         ]);
 
         $newConfig = $user->parameterConfigurations()->create([
-            'batch'         => $validated['batch'] ?? 'Batch A',
-            'ambientTemp'   => $validated['ambientTemp'],
-            'ambientHum'    => $validated['ambientHum'],
-            'soilMoisture'  => $validated['soilMoisture'],
-            'soilTemp'      => $validated['soilTemp'],
-            'uvStart'       => $validated['uvStart'],
-            'uvDuration'    => $validated['uvDuration'],
-            'ledStart'      => $validated['ledStart'],
-            'ledDuration'   => $validated['ledDuration'],
-            'is_active'     => true,
+            'batch_id' => $validated['batch_id'] ?? null,
+            'ambient_temp' => $validated['ambient_temp'],
+            'humidity' => $validated['humidity'],
+            'soil_moisture' => $validated['soil_moisture'],
+            'soil_temp' => $validated['soil_temp'],
+            'uv_start' => $validated['uv_start'],
+            'uv_duration' => $validated['uv_duration'],
+            'led_start' => $validated['led_start'],
+            'led_duration' => $validated['led_duration'],
+            'is_active' => true,
         ]);
 
         return response()->json([
-            'status'  => 'success',
+            'status' => 'success',
             'message' => 'Hardware parameters updated and saved to database.',
-            'data'    => $newConfig
+            'data' => $newConfig->load('batch'),
         ], 201);
     }
 
-    public function showBatchConfig(Request $request, $batch)
+    /**
+     * Show latest saved config for a specific batch.
+     */
+    public function showBatchConfig(Request $request, $batchId)
     {
         $user = $request->user();
 
+        $batch = Batch::where('batch_id', $batchId)->firstOrFail();
+
         $config = $user->parameterConfigurations()
-            ->where('batch', $batch)
+            ->with('batch')
+            ->where('batch_id', $batch->id)
             ->latest()
             ->first();
 
         if (!$config) {
             return response()->json([
-                'message' => 'No saved configuration found for this batch.'
+                'message' => 'No saved configuration found for this batch.',
             ], 404);
         }
 
         return response()->json([
-            'batch'         => $config->batch ?? 'Batch A',
-            'ambientTemp'   => (float) $config->ambientTemp,
-            'ambientHum'    => (float) $config->ambientHum,
-            'soilMoisture'  => (float) $config->soilMoisture,
-            'soilTemp'      => (float) $config->soilTemp,
-            'uvStart'       => $config->uvStart,
-            'uvDuration'    => (int) $config->uvDuration,
-            'ledStart'      => $config->ledStart,
-            'ledDuration'   => (int) $config->ledDuration,
+            'id' => $config->id,
+            'batch_id' => $config->batch_id,
+            'batch' => $config->batch?->batch_id,
+            'ambient_temp' => (float) $config->ambient_temp,
+            'humidity' => (float) $config->humidity,
+            'soil_moisture' => (float) $config->soil_moisture,
+            'soil_temp' => (float) $config->soil_temp,
+            'uv_start' => $config->uv_start,
+            'uv_duration' => (int) $config->uv_duration,
+            'led_start' => $config->led_start,
+            'led_duration' => (int) $config->led_duration,
+            'is_active' => (bool) $config->is_active,
         ]);
     }
 }

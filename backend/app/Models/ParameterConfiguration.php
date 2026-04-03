@@ -13,37 +13,37 @@ class ParameterConfiguration extends Model
 
     protected $fillable = [
         'user_id',
-        'batch',
-        'ambientTemp',
-        'ambientHum',
-        'soilMoisture',
-        'soilTemp',
-        'uvStart',
-        'uvDuration',
-        'ledStart',
-        'ledDuration',
+        'batch_id',
+        'ambient_temp',
+        'humidity',
+        'soil_moisture',
+        'soil_temp',
+        'uv_start',
+        'uv_duration',
+        'led_start',
+        'led_duration',
         'is_active',
     ];
 
-    /**
-     * Ang $casts ay sinisiguro na ang data type ay tama
-     * paglabas ng database (JSON response).
-     */
     protected $casts = [
-        'ambientTemp'  => 'float',
-        'ambientHum'   => 'float',
-        'soilMoisture' => 'float',
-        'soilTemp'     => 'float',
-        'uvDuration'   => 'integer',
-        'ledDuration'  => 'integer',
-        'is_active'    => 'boolean',
+        'user_id' => 'integer',
+        'batch_id' => 'integer',
+        'ambient_temp' => 'float',
+        'humidity' => 'float',
+        'soil_moisture' => 'float',
+        'soil_temp' => 'float',
+        'uv_duration' => 'integer',
+        'led_duration' => 'integer',
+        'is_active' => 'boolean',
     ];
 
-    /**
-     * Link pabalik sa User na nag-set ng configuration na ito.
-     */
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function batch()
+    {
+        return $this->belongsTo(Batch::class);
     }
 }
