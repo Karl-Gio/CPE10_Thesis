@@ -1,0 +1,52 @@
+.dw-card {
+  background: #ffffff;
+}
+
+.dw-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.dw-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dw-extra-block {
+  min-width: 90px;
+}
+
+.dw-extra-title {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.dw-extra-value {
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.dw-badge {
+  font-weight: 600;
+}
+
+.dw-chart-wrap {
+  height: 280px;
+  padding: 12px;
+}
+
+.dw-chart-loading {
+  height: 280px;
+}
+
+.dw-health-box {
+  transition: all 0.2s ease;
+}
+
+@media (max-width: 576px) {
+  .dw-extra-block {
+    min-width: unset;
+  }
+}

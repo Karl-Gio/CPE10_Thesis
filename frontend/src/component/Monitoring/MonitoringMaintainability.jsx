@@ -27,11 +27,50 @@ import {
   formatNumber,
   buildChartData,
   buildStats,
+  getMetricDomain,
 } from "./monitoringHelpers";
 
 import "./MonitoringMaintainability.css";
 
 const API = "http://localhost:8000/api";
+const MAX_POINTS = 120;
+
+const METRIC_CONFIG = {
+  ambient: {
+    title: "Ambient Temperature",
+    subtitle:
+      "Actual readings against the target setpoint with tighter scaling.",
+    actualKey: "ambient_temp",
+    targetKey: "ambient_target",
+    actualColor: "#3b82f6",
+    targetColor: "#f43f5e",
+  },
+  humidity: {
+    title: "Relative Humidity",
+    subtitle:
+      "Small fluctuations are easier to evaluate for maintainability trends.",
+    actualKey: "humidity",
+    targetKey: "humidity_target",
+    actualColor: "#10b981",
+    targetColor: "#f43f5e",
+  },
+  soilTemp: {
+    title: "Soil Temperature",
+    subtitle: "Focused range makes small control changes more visible.",
+    actualKey: "soil_temp",
+    targetKey: "soil_temp_target",
+    actualColor: "#8b5cf6",
+    targetColor: "#f43f5e",
+  },
+  soilMoisture: {
+    title: "Soil Moisture",
+    subtitle: "Consistency and variance are easier to inspect at a glance.",
+    actualKey: "soil_moisture",
+    targetKey: "soil_moisture_target",
+    actualColor: "#f97316",
+    targetColor: "#f43f5e",
+  },
+};
 
 export default function MonitoringMaintainability() {
   const [batches, setBatches] = useState([]);
@@ -54,7 +93,7 @@ export default function MonitoringMaintainability() {
     try {
       setError("");
       const res = await axios.get(`${API}/batches`, getAuthConfig());
-      const data = Array.isArray(res.data) ? res.data : res.data.data ?? [];
+      const data = Array.isArray(res.data) ? res.data : (res.data.data ?? []);
       setBatches(data);
 
       if (data.length > 0) {
@@ -70,7 +109,12 @@ export default function MonitoringMaintainability() {
     try {
       setLoading(true);
       setError("");
-      const res = await axios.get(`${API}/monitoring/${batchId}`, getAuthConfig());
+
+      const res = await axios.get(
+        `${API}/monitoring/${batchId}`,
+        getAuthConfig(),
+      );
+
       setMonitoringData(res.data);
     } catch (err) {
       console.error(err);
@@ -80,24 +124,57 @@ export default function MonitoringMaintainability() {
     }
   };
 
-  const chartData = useMemo(() => buildChartData(monitoringData), [monitoringData]);
+  const rawChartData = useMemo(
+    () => buildChartData(monitoringData),
+    [monitoringData],
+  );
+
+  const chartData = useMemo(() => {
+    if (!Array.isArray(rawChartData)) return [];
+    if (rawChartData.length <= MAX_POINTS) return rawChartData;
+
+    const step = Math.ceil(rawChartData.length / MAX_POINTS);
+    return rawChartData.filter((_, index) => index % step === 0);
+  }, [rawChartData]);
+
   const stats = useMemo(() => buildStats(monitoringData), [monitoringData]);
+
+  const ambientDomain = useMemo(
+    () => getMetricDomain(chartData, "ambient_temp", "ambient_target", 0.3),
+    [chartData],
+  );
+
+  const humidityDomain = useMemo(
+    () => getMetricDomain(chartData, "humidity", "humidity_target", 0.5),
+    [chartData],
+  );
+
+  const soilTempDomain = useMemo(
+    () => getMetricDomain(chartData, "soil_temp", "soil_temp_target", 0.3),
+    [chartData],
+  );
+
+  const soilMoistureDomain = useMemo(
+    () =>
+      getMetricDomain(chartData, "soil_moisture", "soil_moisture_target", 0.5),
+    [chartData],
+  );
 
   return (
     <div className="mm-page">
       <Container fluid="xl" className="py-4 py-lg-5">
-        <section className="mm-hero mb-4 mb-lg-5">
-          <div>
+        <section className="mm-hero mb-4">
+          <div className="mm-hero-copy">
             <div className="mm-eyebrow">System Monitoring</div>
             <h1 className="mm-title">Maintainability Dashboard</h1>
             <p className="mm-subtitle">
               Track target stability, detect micro-variance, and review batch
-              performance with a cleaner operational view.
+              performance in a cleaner operational view.
             </p>
           </div>
 
           <div className="mm-toolbar">
-            <Form.Group className="mm-select-group">
+            <Form.Group>
               <Form.Label className="mm-label">Batch</Form.Label>
               <Form.Select
                 value={selectedBatch}
@@ -117,8 +194,10 @@ export default function MonitoringMaintainability() {
 
         {loading && (
           <Alert variant="light" className="mm-alert">
-            <Spinner animation="border" size="sm" className="me-2" />
-            Loading monitoring data...
+            <div className="mm-inline-status">
+              <Spinner animation="border" size="sm" />
+              <span>Loading monitoring data...</span>
+            </div>
           </Alert>
         )}
 
@@ -130,7 +209,7 @@ export default function MonitoringMaintainability() {
 
         {monitoringData && (
           <>
-            <Row className="g-4 mb-4">
+            <Row className="g-3 g-lg-4 mb-4">
               <Col md={6} xl={3}>
                 <StatCard
                   label="System Status"
@@ -161,7 +240,7 @@ export default function MonitoringMaintainability() {
               </Col>
             </Row>
 
-            <Row className="g-4 mb-4">
+            <Row className="g-3 g-lg-4 mb-4">
               <Col lg={6}>
                 <Card className="mm-panel h-100">
                   <Card.Body className="p-4">
@@ -170,24 +249,26 @@ export default function MonitoringMaintainability() {
                         <div className="mm-panel-kicker">Overview</div>
                         <h3 className="mm-panel-title">Batch Information</h3>
                       </div>
-                      <Badge bg="light" text="dark" className="mm-badge">
-                        Active Batch
-                      </Badge>
                     </div>
 
-                    <InfoRow label="Batch Number" value={monitoringData.batch_id} />
-                    <InfoRow
-                      label="Date Planted"
-                      value={formatDisplayDate(monitoringData.date_planted)}
-                    />
-                    <InfoRow
-                      label="Date of Germination"
-                      value={
-                        monitoringData.germination_date
-                          ? formatDisplayDate(monitoringData.germination_date)
-                          : "Not yet germinated"
-                      }
-                    />
+                    <div className="mm-info-list">
+                      <InfoRow
+                        label="Batch Number"
+                        value={monitoringData.batch_id}
+                      />
+                      <InfoRow
+                        label="Date Planted"
+                        value={formatDisplayDate(monitoringData.date_planted)}
+                      />
+                      <InfoRow
+                        label="Date of Germination"
+                        value={
+                          monitoringData.germination_date
+                            ? formatDisplayDate(monitoringData.germination_date)
+                            : "Not yet germinated"
+                        }
+                      />
+                    </div>
                   </Card.Body>
                 </Card>
               </Col>
@@ -203,223 +284,83 @@ export default function MonitoringMaintainability() {
                         </div>
                       </div>
 
-                      <InfoRow
-                        label="Ambient Temperature"
-                        value={monitoringData.target.ambientTemp}
-                      />
-                      <InfoRow
-                        label="Relative Humidity"
-                        value={monitoringData.target.humidity}
-                      />
-                      <InfoRow
-                        label="Soil Temperature"
-                        value={monitoringData.target.soilTemp}
-                      />
-                      <InfoRow
-                        label="Soil Moisture"
-                        value={monitoringData.target.soilMoisture}
-                      />
+                      <div className="mm-info-list">
+                        <InfoRow
+                          label="Ambient Temperature"
+                          value={monitoringData.target.ambientTemp}
+                        />
+                        <InfoRow
+                          label="Relative Humidity"
+                          value={monitoringData.target.humidity}
+                        />
+                        <InfoRow
+                          label="Soil Temperature"
+                          value={monitoringData.target.soilTemp}
+                        />
+                        <InfoRow
+                          label="Soil Moisture"
+                          value={monitoringData.target.soilMoisture}
+                        />
+                      </div>
                     </Card.Body>
                   </Card>
                 </Col>
               )}
             </Row>
 
-            <ChartCard
-              title="Ambient Temperature"
-              subtitle="Shows actual readings against the target setpoint with tighter visual scaling."
-            >
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27344922" />
-                  <XAxis
-                    dataKey="shortTime"
-                    tick={{ fontSize: 11, fill: "#64748b" }}
-                    interval="preserveStartEnd"
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    tickFormatter={formatNumber}
-                    tick={{ fill: "#64748b" }}
-                    domain={
-                      monitoringData?.target
-                        ? [
-                            monitoringData.target.ambientTemp - 1.2,
-                            monitoringData.target.ambientTemp + 1.2,
-                          ]
-                        : ["auto", "auto"]
-                    }
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="ambient_temp_ex"
-                    name="Actual"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="ambient_target"
-                    name="Target"
-                    stroke="#f43f5e"
-                    strokeWidth={2}
-                    strokeDasharray="6 6"
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+            <Row className="g-3 g-lg-4">
+              <Col xl={6}>
+                <MetricChart
+                  title={METRIC_CONFIG.ambient.title}
+                  subtitle={METRIC_CONFIG.ambient.subtitle}
+                  data={chartData}
+                  actualKey={METRIC_CONFIG.ambient.actualKey}
+                  targetKey={METRIC_CONFIG.ambient.targetKey}
+                  actualColor={METRIC_CONFIG.ambient.actualColor}
+                  targetColor={METRIC_CONFIG.ambient.targetColor}
+                  domain={ambientDomain}
+                />
+              </Col>
 
-            <ChartCard
-              title="Relative Humidity"
-              subtitle="Makes small fluctuations easier to evaluate for maintainability trends."
-            >
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27344922" />
-                  <XAxis
-                    dataKey="shortTime"
-                    tick={{ fontSize: 11, fill: "#64748b" }}
-                    interval="preserveStartEnd"
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    tickFormatter={formatNumber}
-                    tick={{ fill: "#64748b" }}
-                    domain={
-                      monitoringData?.target
-                        ? [
-                            monitoringData.target.humidity - 1.2,
-                            monitoringData.target.humidity + 1.2,
-                          ]
-                        : ["auto", "auto"]
-                    }
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="humidity_ex"
-                    name="Actual"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="humidity_target"
-                    name="Target"
-                    stroke="#f43f5e"
-                    strokeWidth={2}
-                    strokeDasharray="6 6"
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+              <Col xl={6}>
+                <MetricChart
+                  title={METRIC_CONFIG.humidity.title}
+                  subtitle={METRIC_CONFIG.humidity.subtitle}
+                  data={chartData}
+                  actualKey={METRIC_CONFIG.humidity.actualKey}
+                  targetKey={METRIC_CONFIG.humidity.targetKey}
+                  actualColor={METRIC_CONFIG.humidity.actualColor}
+                  targetColor={METRIC_CONFIG.humidity.targetColor}
+                  domain={humidityDomain}
+                />
+              </Col>
 
-            <ChartCard
-              title="Soil Temperature"
-              subtitle="Highlights tight environmental control with a more focused view."
-            >
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27344922" />
-                  <XAxis
-                    dataKey="shortTime"
-                    tick={{ fontSize: 11, fill: "#64748b" }}
-                    interval="preserveStartEnd"
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    tickFormatter={formatNumber}
-                    tick={{ fill: "#64748b" }}
-                    domain={
-                      monitoringData?.target
-                        ? [
-                            monitoringData.target.soilTemp - 1.2,
-                            monitoringData.target.soilTemp + 1.2,
-                          ]
-                        : ["auto", "auto"]
-                    }
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="soil_temp_ex"
-                    name="Actual"
-                    stroke="#8b5cf6"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="soil_temp_target"
-                    name="Target"
-                    stroke="#f43f5e"
-                    strokeWidth={2}
-                    strokeDasharray="6 6"
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+              <Col xl={6}>
+                <MetricChart
+                  title={METRIC_CONFIG.soilTemp.title}
+                  subtitle={METRIC_CONFIG.soilTemp.subtitle}
+                  data={chartData}
+                  actualKey={METRIC_CONFIG.soilTemp.actualKey}
+                  targetKey={METRIC_CONFIG.soilTemp.targetKey}
+                  actualColor={METRIC_CONFIG.soilTemp.actualColor}
+                  targetColor={METRIC_CONFIG.soilTemp.targetColor}
+                  domain={soilTempDomain}
+                />
+              </Col>
 
-            <ChartCard
-              title="Soil Moisture"
-              subtitle="Tighter scaling surfaces consistency and variance more clearly."
-            >
-              <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27344922" />
-                  <XAxis
-                    dataKey="shortTime"
-                    tick={{ fontSize: 11, fill: "#64748b" }}
-                    interval="preserveStartEnd"
-                    minTickGap={28}
-                  />
-                  <YAxis
-                    tickFormatter={formatNumber}
-                    tick={{ fill: "#64748b" }}
-                    domain={
-                      monitoringData?.target
-                        ? [
-                            monitoringData.target.soilMoisture - 1.2,
-                            monitoringData.target.soilMoisture + 1.2,
-                          ]
-                        : ["auto", "auto"]
-                    }
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="soil_moisture_ex"
-                    name="Actual"
-                    stroke="#f97316"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="soil_moisture_target"
-                    name="Target"
-                    stroke="#f43f5e"
-                    strokeWidth={2}
-                    strokeDasharray="6 6"
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+              <Col xl={6}>
+                <MetricChart
+                  title={METRIC_CONFIG.soilMoisture.title}
+                  subtitle={METRIC_CONFIG.soilMoisture.subtitle}
+                  data={chartData}
+                  actualKey={METRIC_CONFIG.soilMoisture.actualKey}
+                  targetKey={METRIC_CONFIG.soilMoisture.targetKey}
+                  actualColor={METRIC_CONFIG.soilMoisture.actualColor}
+                  targetColor={METRIC_CONFIG.soilMoisture.targetColor}
+                  domain={soilMoistureDomain}
+                />
+              </Col>
+            </Row>
           </>
         )}
       </Container>
@@ -439,7 +380,7 @@ function InfoRow({ label, value }) {
 function StatCard({ label, value, tone = "primary" }) {
   return (
     <Card className={`mm-stat mm-stat-${tone}`}>
-      <Card.Body>
+      <Card.Body className="p-4">
         <div className="mm-stat-label">{label}</div>
         <div className="mm-stat-value">{value}</div>
       </Card.Body>
@@ -447,34 +388,104 @@ function StatCard({ label, value, tone = "primary" }) {
   );
 }
 
-function ChartCard({ title, subtitle, children }) {
+const MetricChart = React.memo(function MetricChart({
+  title,
+  subtitle,
+  data,
+  actualKey,
+  targetKey,
+  actualColor,
+  targetColor,
+  domain,
+}) {
   return (
-    <Card className="mm-panel mm-chart-card mb-4">
+    <Card className="mm-panel mm-chart-card h-100">
       <Card.Body className="p-4">
-        <div className="mm-panel-head mb-3">
+        <div className="mm-panel-head mm-panel-head-chart mb-3">
           <div>
             <div className="mm-panel-kicker">Metric Trend</div>
             <h3 className="mm-panel-title">{title}</h3>
             <p className="mm-panel-subtitle mb-0">{subtitle}</p>
           </div>
         </div>
-        {children}
+
+        <div className="mm-chart-wrap">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid
+                stroke="#e2e8f0"
+                strokeDasharray="3 3"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="shortTime"
+                interval="preserveStartEnd"
+                minTickGap={28}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "#64748b" }}
+              />
+              <YAxis
+                tickFormatter={formatNumber}
+                domain={domain}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "#64748b" }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend className="mm-chart-legend" />
+              <Line
+                type="monotone"
+                dataKey={actualKey}
+                name="Actual"
+                stroke={actualColor}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 4 }}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey={targetKey}
+                name="Target"
+                stroke={targetColor}
+                strokeWidth={2}
+                strokeDasharray="6 6"
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </Card.Body>
     </Card>
   );
-}
+});
 
-function CustomTooltip({ active, payload, label }) {
+const CustomTooltip = React.memo(function CustomTooltip({
+  active,
+  payload,
+  label,
+}) {
   if (!active || !payload || !payload.length) return null;
 
   return (
     <div className="mm-tooltip">
       <div className="mm-tooltip-title">{label}</div>
+
       {payload.map((entry, index) => (
-        <div key={index} className="mm-tooltip-item" style={{ color: entry.color }}>
-          {entry.name}: <strong>{formatNumber(entry.value)}</strong>
+        <div key={index} className="mm-tooltip-item">
+          <span
+            className="mm-tooltip-dot"
+            styleMarker={entry.color}
+            data-color={entry.color}
+          />
+          <span className="mm-tooltip-name">{entry.name}</span>
+          <strong className="mm-tooltip-value">
+            {formatNumber(entry.value)}
+          </strong>
         </div>
       ))}
     </div>
   );
-}
+});
