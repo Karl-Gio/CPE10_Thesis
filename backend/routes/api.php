@@ -38,6 +38,7 @@ Route::get('/batches/{batch_id}', [BatchController::class, 'show']);
 Route::post('/batches', [BatchController::class, 'store']);
 Route::patch('/batches/latest/germination-date', [BatchController::class, 'updateLatestGerminationDate']);
 Route::patch('/batches/{batch_id}', [BatchController::class, 'update']);
+Route::get('/monitoring/{batch_id}', [BatchController::class, 'monitoring']);
 
 Route::get('/testing-parameters/latest', [TestingParameterController::class, 'latest']);
 Route::apiResource('testing-parameters', TestingParameterController::class);
