@@ -7,6 +7,7 @@ import ParametersPage from './component/System_Configuration/ParametersPage'
 import PredictionPage from './component/Growth Analytics_&_Prediction/PredictionPage'
 import TestingPage from './component/Testing/TestingPage'
 import ProtectedRoute from './ProtectedRoute'
+import MonitoringMaintainability from './component/Monitoring/MonitoringMaintainability'
 
 function App() {
   return (
@@ -30,6 +31,15 @@ function App() {
         element={
           <ProtectedRoute>
             <ParametersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/monitoring-maintainability"
+        element={
+          <ProtectedRoute>
+            <MonitoringMaintainability />
           </ProtectedRoute>
         }
       />
