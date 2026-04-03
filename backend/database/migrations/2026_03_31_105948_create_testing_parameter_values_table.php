@@ -15,9 +15,8 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
-            // ACTUAL SENSOR VALUES ONLY
             $table->decimal('ambient_temp', 8, 2)->nullable();
-            $table->decimal('ambient_humidity', 8, 2)->nullable();
+            $table->decimal('humidity', 8, 2)->nullable();
             $table->decimal('soil_temp', 8, 2)->nullable();
             $table->decimal('soil_moisture', 8, 2)->nullable();
             $table->decimal('light_intensity', 8, 2)->nullable();

@@ -14,18 +14,20 @@ return new class extends Migration
         Schema::create('parameters', function (Blueprint $table) {
             $table->id();
 
-            // Batch / identification
-            $table->string('Batch')->nullable();
+            // RELATION
+            $table->foreignId('batch_id')
+                ->constrained('batches')
+                ->cascadeOnDelete();
 
             // Environmental readings
-            $table->decimal('Ambient_Temperature', 8, 2)->nullable();
-            $table->decimal('Relative_Humidity', 8, 2)->nullable();
-            $table->decimal('Soil_Temperature', 8, 2)->nullable();
-            $table->decimal('Soil_Moisture', 8, 2)->nullable();
-            $table->decimal('Light_Intensity', 10, 2)->nullable();
+            $table->decimal('ambient_temp', 8, 2)->nullable();
+            $table->decimal('humidity', 8, 2)->nullable();
+            $table->decimal('soil_temp', 8, 2)->nullable();
+            $table->decimal('soil_moisture', 8, 2)->nullable();
+            $table->decimal('light_intensity', 10, 2)->nullable();
 
             // AI prediction
-            $table->integer('Pechay_Count')->default(0);
+            $table->integer('pechay_count')->default(0);
 
             $table->timestamps();
         });

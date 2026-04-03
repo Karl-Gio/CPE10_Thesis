@@ -13,6 +13,9 @@ return new class extends Migration
     {
         Schema::create('batches', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+
             $table->string('batch_id')->unique(); 
             $table->dateTime('date_planted');
             $table->double('predicted_days')->nullable(); 

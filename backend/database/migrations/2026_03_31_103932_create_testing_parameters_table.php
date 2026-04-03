@@ -10,14 +10,20 @@ return new class extends Migration
     {
         Schema::create('testing_parameters', function (Blueprint $table) {
             $table->id();
-            $table->string('batch')->nullable();
+
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
+
             $table->decimal('ambient_temp', 8, 2)->nullable();
-            $table->decimal('ambient_humidity', 8, 2)->nullable();
+            $table->decimal('humidity', 8, 2)->nullable();
             $table->decimal('soil_moisture', 8, 2)->nullable();
             $table->decimal('soil_temp', 8, 2)->nullable();
-            $table->boolean('uv')->default(0);
-            $table->boolean('led')->default(0);
+
+            $table->boolean('uv')->default(false);
+            $table->boolean('led')->default(false);
             $table->integer('duration')->nullable();
+
             $table->timestamps();
         });
     }

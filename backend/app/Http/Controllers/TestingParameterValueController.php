@@ -11,11 +11,8 @@ class TestingParameterValueController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'batch' => 'nullable|string|max:255',
-
-            // TARGET (from Python)
             'ambient_temp_target' => 'nullable|numeric',
-            'ambient_humidity_target' => 'nullable|numeric',
+            'humidity_target' => 'nullable|numeric',
             'soil_moisture_target' => 'nullable|numeric',
             'soil_temp_target' => 'nullable|numeric',
 
@@ -23,9 +20,8 @@ class TestingParameterValueController extends Controller
             'led' => 'nullable|boolean',
             'duration' => 'nullable|integer|min:1',
 
-            // ACTUAL SENSOR VALUES
             'ambient_temp_actual' => 'nullable|numeric',
-            'ambient_humidity_actual' => 'nullable|numeric',
+            'humidity_actual' => 'nullable|numeric',
             'soil_moisture_actual' => 'nullable|numeric',
             'soil_temp_actual' => 'nullable|numeric',
             'light_intensity' => 'nullable|numeric',
@@ -33,11 +29,9 @@ class TestingParameterValueController extends Controller
             'recorded_at' => 'nullable|date',
         ]);
 
-        // 🔹 Step 1: Find or create testing parameter (parent)
-        $parameter = TestingParameter::firstOrCreate([
-            'batch' => $data['batch'] ?? null,
+        $parameter = $request->user()->testingParameters()->firstOrCreate([
             'ambient_temp' => $data['ambient_temp_target'] ?? null,
-            'ambient_humidity' => $data['ambient_humidity_target'] ?? null,
+            'humidity' => $data['humidity_target'] ?? null,
             'soil_moisture' => $data['soil_moisture_target'] ?? null,
             'soil_temp' => $data['soil_temp_target'] ?? null,
             'uv' => $data['uv'] ?? false,
@@ -45,11 +39,10 @@ class TestingParameterValueController extends Controller
             'duration' => $data['duration'] ?? null,
         ]);
 
-        // 🔹 Step 2: Save sensor reading (child)
         $value = TestingParameterValue::create([
             'testing_parameter_id' => $parameter->id,
             'ambient_temp' => $data['ambient_temp_actual'] ?? null,
-            'ambient_humidity' => $data['ambient_humidity_actual'] ?? null,
+            'humidity' => $data['humidity_actual'] ?? null,
             'soil_moisture' => $data['soil_moisture_actual'] ?? null,
             'soil_temp' => $data['soil_temp_actual'] ?? null,
             'light_intensity' => $data['light_intensity'] ?? null,
@@ -59,17 +52,31 @@ class TestingParameterValueController extends Controller
         return response()->json([
             'message' => 'Testing log saved successfully',
             'testing_parameter_id' => $parameter->id,
-            'data' => $value
+            'data' => $value,
         ], 201);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return TestingParameterValue::with('testingParameter')->latest()->get();
+        return response()->json(
+            TestingParameterValue::whereHas('testingParameter', function ($q) use ($request) {
+                $q->where('user_id', $request->user()->id);
+            })
+            ->with('testingParameter')
+            ->latest()
+            ->get()
+        );
     }
 
-    public function latest()
+    public function latest(Request $request)
     {
-        return TestingParameterValue::with('testingParameter')->latest()->first();
+        return response()->json(
+            TestingParameterValue::whereHas('testingParameter', function ($q) use ($request) {
+                $q->where('user_id', $request->user()->id);
+            })
+            ->with('testingParameter')
+            ->latest()
+            ->first()
+        );
     }
 }

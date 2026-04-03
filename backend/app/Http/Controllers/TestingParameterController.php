@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\TestingParameter;
 use Illuminate\Http\Request;
 
@@ -11,9 +10,8 @@ class TestingParameterController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'batch' => 'nullable|string|max:255',
             'ambient_temp' => 'nullable|numeric',
-            'ambient_humidity' => 'nullable|numeric',
+            'humidity' => 'nullable|numeric',
             'soil_moisture' => 'nullable|numeric',
             'soil_temp' => 'nullable|numeric',
             'uv' => 'required|boolean',
@@ -21,35 +19,56 @@ class TestingParameterController extends Controller
             'duration' => 'nullable|integer|min:1',
         ]);
 
-        $param = TestingParameter::create($data);
+        $param = $request->user()->testingParameters()->create($data);
 
         return response()->json([
-            'message' => 'Parameters saved successfully',
-            'data' => $param
-        ]);
+            'message' => 'Testing parameters saved successfully',
+            'data' => $param,
+        ], 201);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return TestingParameter::latest()->get();
+        return response()->json(
+            $request->user()
+                ->testingParameters()
+                ->with('values')
+                ->latest()
+                ->get()
+        );
     }
 
-    public function latest()
+    public function latest(Request $request)
     {
-        return TestingParameter::latest()->first();
+        return response()->json(
+            $request->user()
+                ->testingParameters()
+                ->with('values')
+                ->latest()
+                ->first()
+        );
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        return TestingParameter::findOrFail($id);
+        return response()->json(
+            $request->user()
+                ->testingParameters()
+                ->with('values')
+                ->findOrFail($id)
+        );
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        TestingParameter::findOrFail($id)->delete();
+        $testingParameter = $request->user()
+            ->testingParameters()
+            ->findOrFail($id);
+
+        $testingParameter->delete();
 
         return response()->json([
-            'message' => 'Deleted successfully'
+            'message' => 'Deleted successfully',
         ]);
     }
 }
