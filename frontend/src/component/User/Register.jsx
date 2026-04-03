@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { Container, Card, Form, Button, Alert } from "react-bootstrap";
-import { SlidersVertical } from "lucide-react";
+import { SlidersVertical, Eye, EyeOff } from "lucide-react";
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -13,7 +13,8 @@ function Register() {
   });
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -117,19 +118,36 @@ function Register() {
               <Form.Label className="fw-semibold" style={{ color: "#334155" }}>
                 Password
               </Form.Label>
-              <Form.Control
-                type="password"
-                name="password"
-                placeholder="Password"
-                onChange={handleChange}
-                required
-                className="py-3"
-                style={{
-                  borderRadius: 12,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                }}
-              />
+
+              <div style={{ position: "relative" }}>
+                <Form.Control
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Password"
+                  onChange={handleChange}
+                  required
+                  className="py-3 pe-5"
+                  style={{
+                    borderRadius: 12,
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                  }}
+                />
+
+                <span
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: 15,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    cursor: "pointer",
+                    color: "#64748b",
+                  }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </span>
+              </div>
             </Form.Group>
 
             {/* Confirm Password */}
@@ -137,19 +155,36 @@ function Register() {
               <Form.Label className="fw-semibold" style={{ color: "#334155" }}>
                 Confirm Password
               </Form.Label>
-              <Form.Control
-                type="password"
-                name="password_confirmation"
-                placeholder="Confirm Password"
-                onChange={handleChange}
-                required
-                className="py-3"
-                style={{
-                  borderRadius: 12,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                }}
-              />
+
+              <div style={{ position: "relative" }}>
+                <Form.Control
+                  type={showConfirmPassword ? "text" : "password"}
+                  name="password_confirmation"
+                  placeholder="Confirm Password"
+                  onChange={handleChange}
+                  required
+                  className="py-3 pe-5"
+                  style={{
+                    borderRadius: 12,
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                  }}
+                />
+
+                <span
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{
+                    position: "absolute",
+                    right: 15,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    cursor: "pointer",
+                    color: "#64748b",
+                  }}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </span>
+              </div>
             </Form.Group>
 
             {/* Button */}

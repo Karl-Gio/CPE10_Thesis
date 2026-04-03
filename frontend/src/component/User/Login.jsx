@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import { Container, Row, Col, Form, Button, Alert } from "react-bootstrap";
-import { SlidersVertical } from "lucide-react";
+import { SlidersVertical, Eye, EyeOff } from "lucide-react";
 
 function Login() {
   const [formData, setFormData] = useState({ name: "", password: "" });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -135,27 +136,41 @@ function Login() {
 
                 {/* Password */}
                 <Form.Group className="mb-4">
-                  <Form.Label
-                    className="fw-semibold"
-                    style={{ color: "#334155" }}
-                  >
+                  <Form.Label className="fw-semibold" style={{ color: "#334155" }}>
                     Password
                   </Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="password"
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    autoComplete="current-password"
-                    className="py-3"
-                    style={{
-                      borderRadius: 12,
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                    }}
-                  />
+
+                  <div style={{ position: "relative" }}>
+                    <Form.Control
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="Enter your password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      className="py-3 pe-5"
+                      style={{
+                        borderRadius: 12,
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                      }}
+                    />
+
+                    {/* Eye Icon */}
+                    <span
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: "absolute",
+                        right: 15,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        cursor: "pointer",
+                        color: "#64748b",
+                      }}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </span>
+                  </div>
                 </Form.Group>
 
                 <Button
