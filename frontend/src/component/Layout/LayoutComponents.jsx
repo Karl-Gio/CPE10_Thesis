@@ -28,27 +28,37 @@ export function SideBar() {
       localStorage.removeItem("user");
       navigate("/");
     }
-};
+  };
 
   const linkStyle = ({ isActive }) => ({
     display: "block",
     padding: "10px 12px",
     borderRadius: 10,
     textDecoration: "none",
-    color: isActive ? "#198754" : "#334155",
-    background: isActive ? "rgba(25,135,84,0.10)" : "transparent",
+    color: isActive ? "#198754" : "#cbd5e1",
+    background: isActive ? "rgba(25,135,84,0.12)" : "transparent",
     fontWeight: isActive ? 700 : 600,
+    transition: "all 0.2s ease",
   });
 
   return (
     <div
       className="bg-dark text-white d-flex flex-column p-3"
-      style={{ width: 260, minHeight: "100vh" }}
+      style={{
+        width: 260,
+        minWidth: 260,
+        maxWidth: 260,
+        height: "100vh",
+        position: "sticky",
+        top: 0,
+        flexShrink: 0,
+        overflowY: "auto",
+      }}
     >
       <div className="d-flex align-items-center gap-2 mb-4">
         <div
           className="bg-success text-dark fw-bold d-flex align-items-center justify-content-center"
-          style={{ width: 34, height: 34, borderRadius: 10 }}
+          style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0 }}
         >
           A
         </div>
@@ -63,6 +73,9 @@ export function SideBar() {
         <NavLink to="/prediction" style={linkStyle}>
           📈 Prediction
         </NavLink>
+        <NavLink to="/maintainability" style={linkStyle}>
+          🛠️ Maintainability
+        </NavLink>
       </Nav>
 
       <div className="text-uppercase small opacity-75 mb-2">Controls</div>
@@ -73,7 +86,6 @@ export function SideBar() {
         <NavLink to="/testing" style={linkStyle}>
           🧪 Testing
         </NavLink>
-
         <NavLink to="/validation" style={linkStyle}>
           ✅ Validation
         </NavLink>
@@ -114,7 +126,14 @@ export function DashboardHeader({ title }) {
   const initial = (userName?.[0] || "U").toUpperCase();
 
   return (
-    <div className="d-flex align-items-center justify-content-between border-bottom bg-white px-4 py-3">
+    <div
+      className="d-flex align-items-center justify-content-between border-bottom bg-white px-4 py-3"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
+      }}
+    >
       <div className="d-flex align-items-center gap-3">
         <h4 className="mb-0 fw-bold">{title}</h4>
 

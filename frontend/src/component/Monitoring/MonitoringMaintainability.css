@@ -1,0 +1,279 @@
+.mm-page {
+  min-height: 100vh;
+  color: #0f172a;
+  background: #f6f8fb;
+}
+
+.mm-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #e7edf5;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.mm-hero-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.mm-eyebrow {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mm-title {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: #0f172a;
+}
+
+.mm-subtitle {
+  margin: 12px 0 0;
+  max-width: 760px;
+  color: #64748b;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.mm-toolbar {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+.mm-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.mm-select {
+  border-radius: 14px;
+  border: 1px solid #dbe4ee;
+  padding: 0.85rem 1rem;
+  box-shadow: none;
+  background-color: #ffffff;
+}
+
+.mm-select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 0.18rem rgba(59, 130, 246, 0.1);
+}
+
+.mm-alert {
+  border: 1px solid #e8edf4;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.mm-panel,
+.mm-stat {
+  border: 1px solid #e6edf5;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mm-panel:hover,
+.mm-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.mm-stat {
+  overflow: hidden;
+  position: relative;
+}
+
+.mm-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--accent);
+}
+
+.mm-stat-primary {
+  --accent: #3b82f6;
+}
+
+.mm-stat-success {
+  --accent: #10b981;
+}
+
+.mm-stat-violet {
+  --accent: #8b5cf6;
+}
+
+.mm-stat-orange {
+  --accent: #f97316;
+}
+
+.mm-stat-label {
+  color: #64748b;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.mm-stat-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.mm-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mm-panel-kicker {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.mm-panel-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mm-panel-subtitle {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 0.95rem;
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+.mm-badge {
+  border-radius: 999px;
+  padding: 0.55rem 0.8rem;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc !important;
+}
+
+.mm-info-list {
+  margin-top: 12px;
+}
+
+.mm-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.mm-info-row:last-child {
+  border-bottom: 0;
+}
+
+.mm-info-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.mm-info-value {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+}
+
+.mm-chart-card .recharts-wrapper {
+  font-family: inherit;
+}
+
+.mm-chart-wrap {
+  width: 100%;
+  height: 320px;
+}
+
+.mm-tooltip {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.mm-tooltip-title {
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.mm-tooltip-item {
+  margin-top: 6px;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 1199px) {
+  .mm-toolbar {
+    width: 240px;
+  }
+}
+
+@media (max-width: 992px) {
+  .mm-hero {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 22px;
+  }
+
+  .mm-toolbar {
+    width: 100%;
+  }
+
+  .mm-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 576px) {
+  .mm-title {
+    font-size: 1.9rem;
+  }
+
+  .mm-stat-value {
+    font-size: 1.6rem;
+  }
+
+  .mm-info-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .mm-info-value {
+    text-align: left;
+  }
+}

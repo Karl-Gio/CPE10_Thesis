@@ -17,6 +17,7 @@ import {
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { fetchEnvironmentalTrends, fetchLatestStats, fetchActiveConfig } from "./dashboardHelpers";
 
 ChartJS.register(
   CategoryScale,
@@ -103,44 +104,21 @@ export function MetricGrid() {
   const [uvDuration, setUvDuration] = useState(0);
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
+    const loadData = async () => {
+      const uv = await fetchActiveConfig();
+      setUvDuration(uv);
 
-        const res = await fetch("http://localhost:8000/api/configurations/active", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
-
-        if (!res.ok) throw new Error("Failed to fetch active configuration");
-
-        const data = await res.json();
-        setUvDuration(data?.uvDuration || 0);
-      } catch (err) {
-        console.error("Config Fetch Error:", err);
-      }
+      const stats = await fetchLatestStats();
+      if (stats) setLiveData(stats);
     };
 
-    const fetchStats = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/status");
+    loadData();
 
-        if (!res.ok) throw new Error("Failed to fetch latest dashboard data");
+    const interval = setInterval(async () => {
+      const stats = await fetchLatestStats();
+      if (stats) setLiveData(stats);
+    }, 5000);
 
-        const data = await res.json();
-        setLiveData(data);
-      } catch (err) {
-        console.error("Latest Data Fetch Error:", err.message);
-      }
-    };
-
-    fetchConfig();
-    fetchStats();
-
-    const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -315,43 +293,25 @@ export function TrendsAndHealth() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchTrends = async () => {
+    const loadTrends = async () => {
       try {
-        if (loading === false) {
-          setError("");
-        }
+        if (!loading) setError("");
 
-        const res = await fetch("http://localhost:8000/api/dashboard/trends", {
-          headers: {
-            Accept: "application/json",
-          },
-        });
+        const data = await fetchEnvironmentalTrends();
 
-        if (!res.ok) throw new Error("Failed to fetch trends");
-
-        const data = await res.json();
-
-        setChartData({
-          labels: Array.isArray(data.labels) ? data.labels : [],
-          temp: Array.isArray(data.temp) ? data.temp : [],
-          humidity: Array.isArray(data.humidity) ? data.humidity : [],
-          soilMoisture: Array.isArray(data.soilMoisture) ? data.soilMoisture : [],
-          soilTemp: Array.isArray(data.soilTemp) ? data.soilTemp : [],
-          light: Array.isArray(data.light) ? data.light : [],
-          pechayCount: Array.isArray(data.pechayCount) ? data.pechayCount : [],
-        });
-
+        setChartData(data);
         setError("");
       } catch (err) {
-        console.error("Trend Fetch Error:", err);
+        console.error(err);
         setError("Could not load environmental trends.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTrends();
-    const interval = setInterval(fetchTrends, 5000);
+    loadTrends();
+
+    const interval = setInterval(loadTrends, 5000);
 
     return () => clearInterval(interval);
   }, [loading]);
