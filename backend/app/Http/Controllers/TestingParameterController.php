@@ -34,6 +34,11 @@ class TestingParameterController extends Controller
         return TestingParameter::latest()->get();
     }
 
+    public function latest()
+    {
+        return TestingParameter::latest()->first();
+    }
+
     public function show($id)
     {
         return TestingParameter::findOrFail($id);

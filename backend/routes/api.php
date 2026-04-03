@@ -8,9 +8,7 @@ use App\Http\Controllers\BatchController;
 use App\Http\Controllers\TestingParameterController;
 use App\Http\Controllers\TestingParameterValueController;
 
-// ==========================================
 // PUBLIC ROUTES (No login needed)
-// ==========================================
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -22,22 +20,15 @@ Route::post('/parameters', [ParameterController::class, 'store']);
 Route::get('/dashboard/latest', [ParameterController::class, 'latest']);
 Route::get('/dashboard/trends', [ParameterController::class, 'trends']);
 
-// ==========================================
-// PROTECTED ROUTES (Must have valid Token from React)
-// ==========================================
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Get logged in user info
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
-    // GET: Fetch the active settings to fill the React Inputs
     Route::get('/configurations/active', [ParameterController::class, 'showActiveConfig']);
-
-    // POST: Save the new settings from React
     Route::post('/configurations', [ParameterController::class, 'storeConfig']);
     Route::get('/configurations/batch/{batch}', [ParameterController::class, 'showBatchConfig']);
 });
@@ -48,7 +39,7 @@ Route::post('/batches', [BatchController::class, 'store']);
 Route::patch('/batches/latest/germination-date', [BatchController::class, 'updateLatestGerminationDate']);
 Route::patch('/batches/{batch_id}', [BatchController::class, 'update']);
 
-
+Route::get('/testing-parameters/latest', [TestingParameterController::class, 'latest']);
 Route::apiResource('testing-parameters', TestingParameterController::class);
 
 Route::prefix('testing-values')->group(function () {

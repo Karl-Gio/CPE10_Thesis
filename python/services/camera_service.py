@@ -2,7 +2,6 @@ import time
 import cv2
 import numpy as np
 
-from datetime import datetime
 from config import (
     W,
     H,
@@ -119,10 +118,15 @@ class CameraService:
                             frame,
                             conf=CONFIDENCE_THRESHOLD,
                             verbose=False,
-                            imgsz=320
+                            imgsz=256
                         )
 
-                        count = len(results[0].boxes)
+                        valid_boxes = [
+                            box for box in results[0].boxes
+                            if box.conf.item() >= CONFIDENCE_THRESHOLD
+                        ]
+                        count = len(valid_boxes)
+
                         self.system_service.max_detected = max(self.system_service.max_detected, count)
                         batch_id = self.system_service.current_params.get("batch", "Batch A")
 
@@ -138,7 +142,7 @@ class CameraService:
 
                         current_conf = (
                             round(
-                                (sum(box.conf.item() for box in results[0].boxes) / count) * 100,
+                                (sum(box.conf.item() for box in valid_boxes) / count) * 100,
                                 1
                             ) if count > 0 else 0
                         )
@@ -146,18 +150,17 @@ class CameraService:
                         annotated_frame = frame.copy()
                         masked_frame = np.zeros_like(frame)
 
-                        for result in results:
-                            for box in result.boxes:
-                                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                x1, y1 = max(0, x1), max(0, y1)
-                                x2, y2 = min(W, x2), min(H, y2)
+                        for box in valid_boxes:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            x1, y1 = max(0, x1), max(0, y1)
+                            x2, y2 = min(W, x2), min(H, y2)
 
-                                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                                try:
-                                    masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
-                                except Exception:
-                                    pass
+                            try:
+                                masked_frame[y1:y2, x1:x2] = frame[y1:y2, x1:x2]
+                            except Exception:
+                                pass
 
                         last_annotated_frame = annotated_frame
                         last_masked_frame = masked_frame
@@ -184,33 +187,6 @@ class CameraService:
                         self.system_service.latest_stats["pechay_detected"] = 0
                         self.system_service.latest_stats["confidenceScore"] = 0
                         self.system_service.latest_stats["germination_confirm_counter"] = 0
-
-                now_dt = datetime.now()
-                current_date_str = now_dt.strftime("%m-%d-%Y")
-                current_time_str = now_dt.strftime("%I:%M:%S %p")
-
-                font = cv2.FONT_HERSHEY_PLAIN
-                font_scale = 1.0
-                color = (255, 255, 255)
-                thickness = 1
-                shadow_color = (0, 0, 0)
-
-                x_start = 40
-                y_start = H - 100
-                line_spacing = 18
-
-                lines = [
-                    current_date_str,
-                    f"Time: {current_time_str}"
-                ]
-
-                for i, line in enumerate(lines):
-                    y_pos = y_start + (i * line_spacing)
-                    cv2.putText(final_frame, line, (x_start + 1, y_pos), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start - 1, y_pos), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos + 1), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos - 1), font, font_scale, shadow_color, thickness + 1)
-                    cv2.putText(final_frame, line, (x_start, y_pos), font, font_scale, color, thickness)
 
                 with self.system_service.lock:
                     self.system_service.latest_stats["is_processing"] = self.system_service.is_processing

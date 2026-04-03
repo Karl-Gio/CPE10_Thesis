@@ -10,94 +10,9 @@ import {
   Spinner,
   Alert,
 } from "react-bootstrap";
-import axios from "axios";
 import { SideBar, DashboardHeader } from "../Layout/LayoutComponents";
-
-/* ---------------- DATE / TIME HELPERS ---------------- */
-
-function parseSQLDate(dateString) {
-  if (!dateString) return null;
-
-  // Converts "2026-01-03 14:57:36" -> "2026-01-03T14:57:36"
-  // so JS parses it more reliably
-  const parsed = new Date(dateString.replace(" ", "T"));
-  return isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatDateTime(dateInput) {
-  if (!dateInput) return "—";
-
-  const date =
-    typeof dateInput === "string" ? parseSQLDate(dateInput) : dateInput;
-
-  if (!date) return "—";
-
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDuration(decimalDays) {
-  if (decimalDays === null || decimalDays === undefined || isNaN(decimalDays)) {
-    return "---";
-  }
-
-  const totalHours = Math.round(parseFloat(decimalDays) * 24);
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-
-  return `${days}d, ${hours}hr${hours !== 1 ? "s" : ""}`;
-}
-
-function formatVariance(variance) {
-  if (variance === null || variance === undefined || isNaN(variance)) {
-    return "N/A";
-  }
-
-  const numericVariance = parseFloat(variance);
-
-  if (numericVariance === 0) {
-    return "Perfect Match";
-  }
-
-  const absHours = Math.round(Math.abs(numericVariance) * 24);
-  const days = Math.floor(absHours / 24);
-  const hours = absHours % 24;
-  const timeStr = `${days}d, ${hours}h`;
-
-  if (numericVariance > 0) return `+${timeStr} (Delayed)`;
-  return `-${timeStr} (Ahead)`;
-}
-
-function addDecimalDays(dateInput, decimalDays) {
-  const date =
-    typeof dateInput === "string" ? parseSQLDate(dateInput) : dateInput;
-
-  if (!date || decimalDays === null || decimalDays === undefined || isNaN(decimalDays)) {
-    return null;
-  }
-
-  const millisecondsToAdd = parseFloat(decimalDays) * 24 * 60 * 60 * 1000;
-  return new Date(date.getTime() + millisecondsToAdd);
-}
-
-function calculateDiffInDays(startDate, endDate) {
-  const start =
-    typeof startDate === "string" ? parseSQLDate(startDate) : startDate;
-  const end =
-    typeof endDate === "string" ? parseSQLDate(endDate) : endDate;
-
-  if (!start || !end) return null;
-
-  const diffMs = end.getTime() - start.getTime();
-  return diffMs / (1000 * 60 * 60 * 24);
-}
-
-/* ---------------- COMPONENT ---------------- */
+import { fetchBatches, fetchBatchDetails } from "./predictionService";
+import { formatDateTime, formatDuration, formatVariance, getAnalytics, } from "./predictionUtils";
 
 export default function PredictionPage() {
   const [batches, setBatches] = useState([]);
@@ -108,16 +23,13 @@ export default function PredictionPage() {
   const [error, setError] = useState(null);
   const [dbLatency, setDbLatency] = useState(0);
 
-  /* ---------------- FETCH ALL BATCHES ---------------- */
   useEffect(() => {
-    const fetchBatches = async () => {
+    const loadBatches = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const res = await axios.get("http://localhost:8000/api/batches");
-        const batchList = Array.isArray(res.data) ? res.data : [];
-
+        const batchList = await fetchBatches();
         setBatches(batchList);
 
         if (batchList.length > 0) {
@@ -131,24 +43,21 @@ export default function PredictionPage() {
       }
     };
 
-    fetchBatches();
+    loadBatches();
   }, []);
 
-  /* ---------------- FETCH SELECTED BATCH DETAILS ---------------- */
   useEffect(() => {
     if (!selectedBatchId) return;
 
-    const fetchBatchDetails = async () => {
+    const loadBatchDetails = async () => {
       try {
         setDetailsLoading(true);
 
         const startTime = performance.now();
-        const res = await axios.get(
-          `http://localhost:8000/api/batches/${selectedBatchId}`
-        );
+        const data = await fetchBatchDetails(selectedBatchId);
         const endTime = performance.now();
 
-        setBatchData(res.data);
+        setBatchData(data);
         setDbLatency(Math.round(endTime - startTime));
       } catch (err) {
         console.error("Error fetching batch details:", err);
@@ -158,40 +67,10 @@ export default function PredictionPage() {
       }
     };
 
-    fetchBatchDetails();
+    loadBatchDetails();
   }, [selectedBatchId]);
 
-  /* ---------------- ANALYTICS ---------------- */
-  const analytics = useMemo(() => {
-    if (!batchData) return null;
-
-    const predictedDays = parseFloat(batchData.predicted_days);
-    const plantedDate = parseSQLDate(batchData.date_planted);
-    const actualDate = parseSQLDate(batchData.actual_germination_date);
-
-    const predictedDate =
-      plantedDate && !isNaN(predictedDays)
-        ? addDecimalDays(plantedDate, predictedDays)
-        : null;
-
-    const actualDays =
-      plantedDate && actualDate
-        ? calculateDiffInDays(plantedDate, actualDate)
-        : null;
-
-    const variance =
-      actualDays !== null && !isNaN(predictedDays)
-        ? actualDays - predictedDays
-        : null;
-
-    return {
-      predictedDays: !isNaN(predictedDays) ? predictedDays : null,
-      predictedDate,
-      actualDays,
-      variance,
-      isCompleted: !!actualDate,
-    };
-  }, [batchData]);
+  const analytics = useMemo(() => getAnalytics(batchData), [batchData]);
 
   if (loading) {
     return (
@@ -224,14 +103,16 @@ export default function PredictionPage() {
             <Card.Body className="p-4">
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <h3 className="fw-bold mb-0">Optimization Analysis</h3>
-                <Badge bg="light" className="text-muted border fw-normal py-2 px-3">
+                <Badge
+                  bg="light"
+                  className="text-muted border fw-normal py-2 px-3"
+                >
                   <i className="bi bi-cpu me-1"></i>
                   Server Response:{" "}
                   <span className="fw-bold text-dark">{dbLatency}ms</span>
                 </Badge>
               </div>
 
-              {/* BATCH SELECTOR */}
               <Card className="border-0 shadow-sm rounded-4 mb-4 bg-light">
                 <Card.Body className="p-3">
                   <Row className="g-3 align-items-center">
@@ -275,7 +156,6 @@ export default function PredictionPage() {
                 </div>
               ) : batchData && analytics ? (
                 <>
-                  {/* STAT CARDS */}
                   <Row className="g-4 mb-4">
                     <Col md={3}>
                       <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-primary border-4">
@@ -346,10 +226,12 @@ export default function PredictionPage() {
                     </Col>
                   </Row>
 
-                  {/* TABLE */}
                   <h5 className="fw-bold mb-3">Model Performance Metrics</h5>
                   <div className="table-responsive">
-                    <Table hover className="align-middle bg-white rounded-3 overflow-hidden border">
+                    <Table
+                      hover
+                      className="align-middle bg-white rounded-3 overflow-hidden border"
+                    >
                       <thead className="table-light text-uppercase small">
                         <tr>
                           <th>Batch Identification</th>
@@ -392,12 +274,10 @@ export default function PredictionPage() {
                     variant="info"
                     className="mt-3 border-0 shadow-sm rounded-4 small"
                   >
-                    <strong>Thesis Insight:</strong> The model variance represents
-                    the delta between the{" "}
-                    <strong>Random Forest Regressor</strong> and{" "}
-                    <strong>YOLOv8 Computer Vision</strong> validation. Low
-                    variance (&lt; 1.0 day) indicates high environmental control
-                    efficiency.
+                    <strong>Insight:</strong> This shows how close the Random
+                    Forest prediction is to the actual plant growth. A smaller
+                    difference means the system is accurate and the growing
+                    conditions are well controlled.
                   </Alert>
                 </>
               ) : (
