@@ -36,8 +36,8 @@
 
 .mm-title {
   margin: 0;
-  font-size: clamp(2rem, 3vw, 1.5rem);
-  font-weight: 600;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.05;
   color: #0f172a;
@@ -80,6 +80,12 @@
   border: 1px solid #e8edf4;
   border-radius: 16px;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.mm-inline-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .mm-panel,
@@ -146,6 +152,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.mm-panel-head-chart {
+  align-items: flex-start;
 }
 
 .mm-panel-kicker {
@@ -216,13 +226,18 @@
   height: 320px;
 }
 
+.mm-chart-legend {
+  padding-top: 8px;
+}
+
 .mm-tooltip {
   padding: 12px 14px;
   border-radius: 14px;
   background: #0f172a;
-  color: #fff;
+  color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  min-width: 180px;
 }
 
 .mm-tooltip-title {
@@ -232,7 +247,48 @@
 }
 
 .mm-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
+}
+
+.mm-tooltip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mm-tooltip-dot[data-color="#3b82f6"] {
+  background: #3b82f6;
+}
+
+.mm-tooltip-dot[data-color="#10b981"] {
+  background: #10b981;
+}
+
+.mm-tooltip-dot[data-color="#8b5cf6"] {
+  background: #8b5cf6;
+}
+
+.mm-tooltip-dot[data-color="#f97316"] {
+  background: #f97316;
+}
+
+.mm-tooltip-dot[data-color="#f43f5e"] {
+  background: #f43f5e;
+}
+
+.mm-tooltip-name {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+}
+
+.mm-tooltip-value {
+  margin-left: auto;
+  color: #ffffff;
   font-size: 0.92rem;
 }
 

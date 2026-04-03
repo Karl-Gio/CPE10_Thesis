@@ -54,20 +54,30 @@ export function buildChartData(monitoringData) {
 
     light: round3(row.light),
     pechay_count: round3(row.pechay_count),
-
-    ambient_temp_ex: round3(
-      target.ambientTemp + (row.ambient_temp - target.ambientTemp) * 3
-    ),
-    humidity_ex: round3(
-      target.humidity + (row.humidity - target.humidity) * 3
-    ),
-    soil_temp_ex: round3(
-      target.soilTemp + (row.soil_temp - target.soilTemp) * 3
-    ),
-    soil_moisture_ex: round3(
-      target.soilMoisture + (row.soil_moisture - target.soilMoisture) * 3
-    ),
   }));
+}
+
+export function getMetricDomain(data, actualKey, targetKey, padding = 0.4) {
+  if (!Array.isArray(data) || !data.length) return ["auto", "auto"];
+
+  const values = data
+    .flatMap((row) => [row?.[actualKey], row?.[targetKey]])
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+
+  if (!values.length) return ["auto", "auto"];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  const rawRange = max - min;
+  const safeRange = rawRange === 0 ? 1 : rawRange;
+
+  const dynamicPadding = Math.max(safeRange * 0.25, padding);
+
+  const domainMin = round3(min - dynamicPadding);
+  const domainMax = round3(max + dynamicPadding);
+
+  return [domainMin, domainMax];
 }
 
 export function buildStats(monitoringData) {
