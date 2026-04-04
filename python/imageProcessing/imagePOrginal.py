@@ -14,7 +14,7 @@ CORS(app)
 # CONFIG
 # ============================================
 W, H = 3840, 2160
-CONFIDENCE_THRESHOLD = 0.25
+CONFIDENCE_THRESHOLD = 0.15
 IOU_THRESHOLD = 0.45
 SKIP_FRAMES = 3
 IMG_SIZE = 1280

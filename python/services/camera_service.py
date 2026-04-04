@@ -11,7 +11,6 @@ from config import (
     INFERENCE_DURATION,
     GERMINATION_MIN_COUNT,
     GERMINATION_CONFIRM_FRAMES,
-    START_DATE,
 )
 
 
@@ -86,7 +85,7 @@ class CameraService:
                     if (not self.system_service.is_processing) and (
                         (current_time - self.system_service.last_inference_end) >= INFERENCE_INTERVAL
                     ):
-                        print("🟢 Starting scheduled inference for 5 minutes...")
+                        print(f"🟢 Starting scheduled inference for {INFERENCE_DURATION} seconds...")
                         self.system_service.is_processing = True
                         self.system_service.inference_start_time = current_time
                         frame_count = 0
@@ -128,17 +127,28 @@ class CameraService:
                         count = len(valid_boxes)
 
                         self.system_service.max_detected = max(self.system_service.max_detected, count)
-                        batch_id = self.system_service.current_params.get("batch", "Batch A")
+                        
+                        batch_name = str(self.system_service.current_params.get("batch", "Batch A")).strip()
 
-                        if count >= GERMINATION_MIN_COUNT:
-                            with self.system_service.lock:
-                                self.system_service.germination_confirm_counter += 1
+                        if not self.system_service.germination_saved_for_batch.get(batch_name, False):
+                            if count >= GERMINATION_MIN_COUNT:
+                                with self.system_service.lock:
+                                    self.system_service.germination_confirm_counter += 1
+                            else:
+                                with self.system_service.lock:
+                                    self.system_service.germination_confirm_counter = 0
+
+                            if self.system_service.germination_confirm_counter >= GERMINATION_CONFIRM_FRAMES:
+                                print("🌱 Germination confirmed during inference window.")
+                                self.system_service.handle_germination_detected(batch_name)
+
+                                frame_count = 0
+                                last_annotated_frame = None
+                                last_masked_frame = None
+                                continue
                         else:
                             with self.system_service.lock:
-                                self.system_service.germination_confirm_counter = 0
-
-                        if self.system_service.germination_confirm_counter >= GERMINATION_CONFIRM_FRAMES:
-                            self.system_service.save_actual_germination_date(batch_id)
+                                self.system_service.germination_confirm_counter = GERMINATION_CONFIRM_FRAMES
 
                         current_conf = (
                             round(
@@ -170,7 +180,7 @@ class CameraService:
                             self.system_service.latest_stats["confidenceScore"] = current_conf
                             self.system_service.latest_stats["germination_confirm_counter"] = self.system_service.germination_confirm_counter
                             self.system_service.latest_stats["germination_saved"] = self.system_service.germination_saved_for_batch.get(
-                                batch_id, False
+                                batch_name, False
                             )
 
                     else:
