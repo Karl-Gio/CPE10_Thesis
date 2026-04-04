@@ -19,6 +19,8 @@ class Parameter extends Model
         'soil_moisture',
         'light_intensity',
         'pechay_count',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [

@@ -75,6 +75,12 @@ class ParameterSeeder extends Seeder
                 continue;
             }
 
+            $batchCreatedAt = $batch->created_at
+                ? Carbon::parse($batch->created_at)
+                : $batchStartDate->copy();
+
+            $configCreatedAt = $batchCreatedAt->copy()->addSeconds(random_int(1, 5));
+
             ParameterConfiguration::create([
                 'user_id' => $user->id,
                 'batch_id' => $batch->id,
@@ -87,8 +93,8 @@ class ParameterSeeder extends Seeder
                 'led_start' => '18:00',
                 'led_duration' => (int) round($row[5]),
                 'is_active' => ($row[0] === 30),
-                'created_at' => $batchStartDate,
-                'updated_at' => $batchStartDate,
+                'created_at' => $configCreatedAt,
+                'updated_at' => $configCreatedAt,
             ]);
 
             $ambientMap = [
@@ -126,11 +132,14 @@ class ParameterSeeder extends Seeder
             $soilTempSeries = $soilTempMap[$row[3]];
             $soilMoistureSeries = $soilMoistureMap[$row[4]];
 
-            $intervalMinutes = 144;
+            $intervalMinutes = 160;
             $totalLogs = (int) ceil(($actualDays * 24 * 60) / $intervalMinutes);
 
             for ($logIndex = 0; $logIndex < $totalLogs; $logIndex++) {
-                $logTimestamp = $batchStartDate->copy()->addMinutes($logIndex * $intervalMinutes);
+                $logTimestamp = $configCreatedAt
+                    ->copy()
+                    ->addMinutes($logIndex * $intervalMinutes)
+                    ->addSeconds(random_int(1, 30));
 
                 $hourOfDay = $logTimestamp->hour;
                 $isPM = ($hourOfDay >= 12 && $hourOfDay < 24);
@@ -149,7 +158,7 @@ class ParameterSeeder extends Seeder
                 ]);
             }
 
-            $batchStartDate = $batchStartDate->copy()->addMinutes($totalLogs * $intervalMinutes);
+            $batchStartDate = $batchCreatedAt->copy()->addMinutes($totalLogs * $intervalMinutes);
         }
     }
 }
