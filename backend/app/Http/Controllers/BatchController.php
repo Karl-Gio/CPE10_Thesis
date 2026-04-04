@@ -9,18 +9,23 @@ use Illuminate\Http\Request;
 
 class BatchController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         return response()->json(
-            Batch::with('user')
+            $request->user()
+                ->batches()
                 ->latest()
                 ->get()
         );
     }
 
-    public function show($batchId)
+    public function show(Request $request, $batchId)
     {
-        $batch = Batch::with('user')->where('batch_id', $batchId)->firstOrFail();
+        $batch = $request->user()
+            ->batches()
+            ->where('batch_id', $batchId)
+            ->firstOrFail();
+
         return response()->json($batch);
     }
 
@@ -45,7 +50,10 @@ class BatchController extends Controller
 
     public function update(Request $request, $batchId)
     {
-        $batch = Batch::where('batch_id', $batchId)->firstOrFail();
+        $batch = $request->user()
+            ->batches()
+            ->where('batch_id', $batchId)
+            ->firstOrFail();
 
         $validated = $request->validate([
             'actual_germination_date' => 'required|date',
@@ -61,13 +69,48 @@ class BatchController extends Controller
         ]);
     }
 
+    public function publicUpdateGerminationDate(Request $request)
+    {
+        // 1. Failsafe: If Python sends 0, auto-assign the latest batch
+        if (!$request->filled('batch_id') || $request->batch_id == 0) {
+            $latestBatch = Batch::latest('id')->first();
+            if ($latestBatch) {
+                // Merge the custom batch_id from the latest row
+                $request->merge(['batch_id' => $latestBatch->batch_id]);
+            }
+        }
+
+        // 2. Validate (removed 'integer' just in case your batch_id is formatted like a string)
+        $validated = $request->validate([
+            'batch_id' => 'required',
+            'germinated' => 'required|boolean',
+        ]);
+
+        $batch = Batch::where('batch_id', $validated['batch_id'])->firstOrFail();
+
+        // 3. Update the date if it's currently NULL
+        if ($validated['germinated'] && !$batch->actual_germination_date) {
+            $batch->update([
+                'actual_germination_date' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Germination date processed successfully!',
+            'data' => $batch->fresh(),
+        ]);
+    }
+
     public function updateLatestGerminationDate(Request $request)
     {
         $validated = $request->validate([
             'germinated' => 'required|boolean',
         ]);
 
-        $batch = Batch::latest()->firstOrFail();
+        $batch = $request->user()
+            ->batches()
+            ->latest()
+            ->firstOrFail();
 
         if ($validated['germinated'] && !$batch->actual_germination_date) {
             $batch->update([
@@ -81,9 +124,12 @@ class BatchController extends Controller
         ]);
     }
 
-    public function monitoring($batchId)
+    public function monitoring(Request $request, $batchId)
     {
-        $batch = Batch::where('batch_id', $batchId)->firstOrFail();
+        $batch = $request->user()
+        ->batches()
+        ->where('batch_id', $batchId)
+        ->firstOrFail();
 
         $config = ParameterConfiguration::where('batch_id', $batch->id)
             ->latest()

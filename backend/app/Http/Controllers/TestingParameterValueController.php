@@ -11,33 +11,17 @@ class TestingParameterValueController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'ambient_temp_target' => 'nullable|numeric',
-            'humidity_target' => 'nullable|numeric',
-            'soil_moisture_target' => 'nullable|numeric',
-            'soil_temp_target' => 'nullable|numeric',
-
-            'uv' => 'nullable|boolean',
-            'led' => 'nullable|boolean',
-            'duration' => 'nullable|integer|min:1',
-
+            'testing_parameter_id' => 'required|exists:testing_parameters,id',
             'ambient_temp_actual' => 'nullable|numeric',
             'humidity_actual' => 'nullable|numeric',
             'soil_moisture_actual' => 'nullable|numeric',
             'soil_temp_actual' => 'nullable|numeric',
             'light_intensity' => 'nullable|numeric',
-
             'recorded_at' => 'nullable|date',
         ]);
 
-        $parameter = $request->user()->testingParameters()->firstOrCreate([
-            'ambient_temp' => $data['ambient_temp_target'] ?? null,
-            'humidity' => $data['humidity_target'] ?? null,
-            'soil_moisture' => $data['soil_moisture_target'] ?? null,
-            'soil_temp' => $data['soil_temp_target'] ?? null,
-            'uv' => $data['uv'] ?? false,
-            'led' => $data['led'] ?? false,
-            'duration' => $data['duration'] ?? null,
-        ]);
+        $parameter = TestingParameter::findOrFail($data['testing_parameter_id']);
+        $recordedAt = $data['recorded_at'] ?? now();
 
         $value = TestingParameterValue::create([
             'testing_parameter_id' => $parameter->id,
@@ -46,7 +30,9 @@ class TestingParameterValueController extends Controller
             'soil_moisture' => $data['soil_moisture_actual'] ?? null,
             'soil_temp' => $data['soil_temp_actual'] ?? null,
             'light_intensity' => $data['light_intensity'] ?? null,
-            'recorded_at' => $data['recorded_at'] ?? now(),
+            'recorded_at' => $recordedAt,
+            'created_at' => $recordedAt,
+            'updated_at' => $recordedAt,
         ]);
 
         return response()->json([
