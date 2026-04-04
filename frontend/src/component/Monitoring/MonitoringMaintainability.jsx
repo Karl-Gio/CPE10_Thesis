@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import {
   Container,
   Row,
@@ -8,7 +7,6 @@ import {
   Form,
   Alert,
   Spinner,
-  Badge,
 } from "react-bootstrap";
 import {
   LineChart,
@@ -22,7 +20,8 @@ import {
 } from "recharts";
 
 import {
-  getAuthConfig,
+  fetchBatches,
+  fetchMonitoringData,
   formatDisplayDate,
   formatNumber,
   buildChartData,
@@ -32,7 +31,6 @@ import {
 
 import "./MonitoringMaintainability.css";
 
-const API = "http://localhost:8000/api";
 const MAX_POINTS = 120;
 
 const METRIC_CONFIG = {
@@ -40,8 +38,8 @@ const METRIC_CONFIG = {
     title: "Ambient Temperature",
     subtitle:
       "Actual readings against the target setpoint with tighter scaling.",
-    actualKey: "ambient_temp",
-    targetKey: "ambient_target",
+    actualKey: "ambientTemp",
+    targetKey: "ambientTempTarget",
     actualColor: "#3b82f6",
     targetColor: "#f43f5e",
   },
@@ -49,24 +47,24 @@ const METRIC_CONFIG = {
     title: "Relative Humidity",
     subtitle:
       "Small fluctuations are easier to evaluate for maintainability trends.",
-    actualKey: "humidity",
-    targetKey: "humidity_target",
+    actualKey: "ambientHum",
+    targetKey: "ambientHumTarget",
     actualColor: "#10b981",
     targetColor: "#f43f5e",
   },
   soilTemp: {
     title: "Soil Temperature",
     subtitle: "Focused range makes small control changes more visible.",
-    actualKey: "soil_temp",
-    targetKey: "soil_temp_target",
+    actualKey: "soilTemp",
+    targetKey: "soilTempTarget",
     actualColor: "#8b5cf6",
     targetColor: "#f43f5e",
   },
   soilMoisture: {
     title: "Soil Moisture",
     subtitle: "Consistency and variance are easier to inspect at a glance.",
-    actualKey: "soil_moisture",
-    targetKey: "soil_moisture_target",
+    actualKey: "soilMoisture",
+    targetKey: "soilMoistureTarget",
     actualColor: "#f97316",
     targetColor: "#f43f5e",
   },
@@ -76,57 +74,57 @@ export default function MonitoringMaintainability() {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState("");
   const [monitoringData, setMonitoringData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchBatches();
+    const loadBatches = async () => {
+      try {
+        setLoadingBatches(true);
+        setError("");
+
+        const data = await fetchBatches();
+        setBatches(data);
+
+        if (data.length > 0) {
+          setSelectedBatch(data[0].batchId);
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load batches.");
+      } finally {
+        setLoadingBatches(false);
+      }
+    };
+
+    loadBatches();
   }, []);
 
   useEffect(() => {
-    if (selectedBatch) {
-      fetchMonitoringData(selectedBatch);
-    }
-  }, [selectedBatch]);
+    const loadMonitoring = async () => {
+      if (!selectedBatch) return;
 
-  const fetchBatches = async () => {
-    try {
-      setError("");
-      const res = await axios.get(`${API}/batches`, getAuthConfig());
-      const data = Array.isArray(res.data) ? res.data : (res.data.data ?? []);
-      setBatches(data);
+      try {
+        setLoadingMonitoring(true);
+        setError("");
 
-      if (data.length > 0) {
-        setSelectedBatch(data[0].batch_id);
+        const data = await fetchMonitoringData(selectedBatch);
+        setMonitoringData(data);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load monitoring data.");
+      } finally {
+        setLoadingMonitoring(false);
       }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load batches.");
-    }
-  };
+    };
 
-  const fetchMonitoringData = async (batchId) => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const res = await axios.get(
-        `${API}/monitoring/${batchId}`,
-        getAuthConfig(),
-      );
-
-      setMonitoringData(res.data);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load monitoring data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadMonitoring();
+  }, [selectedBatch]);
 
   const rawChartData = useMemo(
     () => buildChartData(monitoringData),
-    [monitoringData],
+    [monitoringData]
   );
 
   const chartData = useMemo(() => {
@@ -140,25 +138,32 @@ export default function MonitoringMaintainability() {
   const stats = useMemo(() => buildStats(monitoringData), [monitoringData]);
 
   const ambientDomain = useMemo(
-    () => getMetricDomain(chartData, "ambient_temp", "ambient_target", 0.3),
-    [chartData],
+    () => getMetricDomain(chartData, "ambientTemp", "ambientTempTarget", 0.3),
+    [chartData]
   );
 
   const humidityDomain = useMemo(
-    () => getMetricDomain(chartData, "humidity", "humidity_target", 0.5),
-    [chartData],
+    () => getMetricDomain(chartData, "ambientHum", "ambientHumTarget", 0.5),
+    [chartData]
   );
 
   const soilTempDomain = useMemo(
-    () => getMetricDomain(chartData, "soil_temp", "soil_temp_target", 0.3),
-    [chartData],
+    () => getMetricDomain(chartData, "soilTemp", "soilTempTarget", 0.3),
+    [chartData]
   );
 
   const soilMoistureDomain = useMemo(
     () =>
-      getMetricDomain(chartData, "soil_moisture", "soil_moisture_target", 0.5),
-    [chartData],
+      getMetricDomain(
+        chartData,
+        "soilMoisture",
+        "soilMoistureTarget",
+        0.5
+      ),
+    [chartData]
   );
+
+  const isLoading = loadingBatches || loadingMonitoring;
 
   return (
     <div className="mm-page">
@@ -180,11 +185,12 @@ export default function MonitoringMaintainability() {
                 value={selectedBatch}
                 onChange={(e) => setSelectedBatch(e.target.value)}
                 className="mm-select"
+                disabled={loadingBatches}
               >
                 {Array.isArray(batches) &&
                   batches.map((batch) => (
-                    <option key={batch.batch_id} value={batch.batch_id}>
-                      {batch.batch_id}
+                    <option key={batch.batchId} value={batch.batchId}>
+                      {batch.batchId}
                     </option>
                   ))}
               </Form.Select>
@@ -192,7 +198,7 @@ export default function MonitoringMaintainability() {
           </div>
         </section>
 
-        {loading && (
+        {isLoading && (
           <Alert variant="light" className="mm-alert">
             <div className="mm-inline-status">
               <Spinner animation="border" size="sm" />
@@ -207,7 +213,7 @@ export default function MonitoringMaintainability() {
           </Alert>
         )}
 
-        {monitoringData && (
+        {monitoringData && !error && (
           <>
             <Row className="g-3 g-lg-4 mb-4">
               <Col md={6} xl={3}>
@@ -252,19 +258,16 @@ export default function MonitoringMaintainability() {
                     </div>
 
                     <div className="mm-info-list">
-                      <InfoRow
-                        label="Batch Number"
-                        value={monitoringData.batch_id}
-                      />
+                      <InfoRow label="Batch Number" value={monitoringData.batchId} />
                       <InfoRow
                         label="Date Planted"
-                        value={formatDisplayDate(monitoringData.date_planted)}
+                        value={formatDisplayDate(monitoringData.datePlanted)}
                       />
                       <InfoRow
                         label="Date of Germination"
                         value={
-                          monitoringData.germination_date
-                            ? formatDisplayDate(monitoringData.germination_date)
+                          monitoringData.germinationDate
+                            ? formatDisplayDate(monitoringData.germinationDate)
                             : "Not yet germinated"
                         }
                       />
@@ -291,7 +294,7 @@ export default function MonitoringMaintainability() {
                         />
                         <InfoRow
                           label="Relative Humidity"
-                          value={monitoringData.target.humidity}
+                          value={monitoringData.target.ambientHum}
                         />
                         <InfoRow
                           label="Soil Temperature"
@@ -477,8 +480,7 @@ const CustomTooltip = React.memo(function CustomTooltip({
         <div key={index} className="mm-tooltip-item">
           <span
             className="mm-tooltip-dot"
-            styleMarker={entry.color}
-            data-color={entry.color}
+            style={{ backgroundColor: entry.color }}
           />
           <span className="mm-tooltip-name">{entry.name}</span>
           <strong className="mm-tooltip-value">

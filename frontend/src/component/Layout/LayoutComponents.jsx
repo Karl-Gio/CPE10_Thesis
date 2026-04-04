@@ -56,12 +56,6 @@ export function SideBar() {
       }}
     >
       <div className="d-flex align-items-center gap-2 mb-4">
-        <div
-          className="bg-success text-dark fw-bold d-flex align-items-center justify-content-center"
-          style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0 }}
-        >
-          A
-        </div>
         <div className="fw-bold">PechayGermination</div>
       </div>
 

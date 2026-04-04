@@ -1,6 +1,20 @@
 import { useState, useMemo, useEffect } from "react";
 import axios from "axios";
 
+const LARAVEL_API = "http://localhost:8000/api";
+const PYTHON_API = "http://localhost:5000";
+
+const getToken = () => localStorage.getItem("token");
+
+const getAuthHeaders = () => {
+  const token = getToken();
+
+  return {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
 export const useTestingLogic = () => {
   const initialValues = useMemo(
     () => ({
@@ -11,11 +25,9 @@ export const useTestingLogic = () => {
       soilTemp: "",
       duration: "",
 
-      // Environment / Parameters
       paramUv: 0,
       paramLed: 0,
 
-      // Hardware Manual Controls
       manualUv: 0,
       manualLed: 0,
       peltier: 0,
@@ -40,9 +52,12 @@ export const useTestingLogic = () => {
   useEffect(() => {
     const fetchTestingParameters = async () => {
       try {
-        const res = await axios.get(
-          "http://localhost:8000/api/testing-parameters"
-        );
+        const token = getToken();
+        if (!token) return;
+
+        const res = await axios.get(`${LARAVEL_API}/testing-parameters`, {
+          headers: getAuthHeaders(),
+        });
 
         const records = Array.isArray(res.data) ? res.data : [];
 
@@ -59,16 +74,14 @@ export const useTestingLogic = () => {
           ...prev,
           batch: latest.batch ?? "",
           ambientTemp: latest.ambient_temp ?? "",
-          ambientHum: latest.ambient_humidity ?? "",
+          ambientHum: latest.humidity ?? "",
           soilMoisture: latest.soil_moisture ?? "",
           soilTemp: latest.soil_temp ?? "",
           duration: latest.duration ?? "",
 
-          // Only update parameter UV/LED from testing parameters
           paramUv: Number(latest.uv ?? 0),
           paramLed: Number(latest.led ?? 0),
 
-          // Keep manual hardware values independent
           manualUv: prev.manualUv,
           manualLed: prev.manualLed,
           peltier: prev.peltier,
@@ -99,10 +112,7 @@ export const useTestingLogic = () => {
       const normalizedBatch = (values.batch || "").trim().toLowerCase();
 
       if (!normalizedBatch) {
-        setStatusMsg({
-          type: "danger",
-          text: "Batch name is required.",
-        });
+        setStatusMsg({ type: "danger", text: "Batch name is required." });
         return;
       }
 
@@ -125,7 +135,7 @@ export const useTestingLogic = () => {
       const payload = {
         batch: values.batch.trim(),
         ambient_temp: Number(values.ambientTemp || 0),
-        ambient_humidity: Number(values.ambientHum || 0),
+        humidity: Number(values.ambientHum || 0),
         soil_moisture: Number(values.soilMoisture || 0),
         soil_temp: Number(values.soilTemp || 0),
         uv: Number(values.paramUv || 0),
@@ -141,13 +151,37 @@ export const useTestingLogic = () => {
         return;
       }
 
-      const res = axios.post("http://localhost:5000/api/testing-parameters", payload);
+      // 1. Save main testing session to Laravel
+      const laravelRes = await axios.post(
+        `${LARAVEL_API}/testing-parameters`,
+        payload,
+        { headers: getAuthHeaders() }
+      );
+
+      const testingParameterId = laravelRes.data?.data?.id;
+
+      if (!testingParameterId) {
+        throw new Error("Laravel did not return testing_parameter_id");
+      }
+
+      // 2. Send command + session id to Python
+      const pythonPayload = {
+        ...payload,
+        testing_parameter_id: testingParameterId,
+      };
+
+      const pythonRes = await axios.post(
+        `${PYTHON_API}/api/testing-parameters`,
+        pythonPayload
+      );
 
       setExistingBatchNames((prev) => [...prev, normalizedBatch]);
 
       setStatusMsg({
         type: "success",
-        text: res.data?.message || "Testing session started successfully.",
+        text:
+          pythonRes.data?.message ||
+          "Saved to database and sent to hardware successfully.",
       });
     } catch (error) {
       console.error("onSendParams error:", error.response?.data || error);
@@ -155,6 +189,7 @@ export const useTestingLogic = () => {
         type: "danger",
         text:
           error.response?.data?.message ||
+          error.message ||
           "Failed to start testing session.",
       });
     } finally {
@@ -179,7 +214,7 @@ export const useTestingLogic = () => {
       };
 
       const res = await axios.post(
-        "http://localhost:5000/api/manual-hardware",
+        `${PYTHON_API}/api/manual-hardware`,
         payload
       );
 
@@ -208,7 +243,7 @@ export const useTestingLogic = () => {
         text: "Sequential actuator shutdown command sent...",
       });
 
-      await axios.post("http://localhost:5000/api/sequential_shutdown");
+      await axios.post(`${PYTHON_API}/api/sequential_shutdown`);
 
       setStatusMsg({
         type: "warning",
