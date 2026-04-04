@@ -23,7 +23,7 @@ export const useParametersLogic = () => {
       ledStart: "",
       ledDuration: "",
     }),
-    []
+    [],
   );
 
   const [values, setValues] = useState(initialValues);
@@ -75,7 +75,7 @@ export const useParametersLogic = () => {
     const newest = sorted[0] || null;
 
     const existingBatch = sorted.find(
-      (b) => normalizeBatchId(getBatchDisplayId(b)) === normalizedSelected
+      (b) => normalizeBatchId(getBatchDisplayId(b)) === normalizedSelected,
     );
 
     const latestIncomplete = newest && !newest.actual_germination_date;
@@ -93,41 +93,54 @@ export const useParametersLogic = () => {
       setStatusMsg({
         type: "warning",
         text: `Cannot create a new batch yet. Latest batch (${getBatchDisplayId(
-          newest
+          newest,
         )}) is still ongoing and has no germination date.`,
       });
+    } else if (!normalizedSelected) {
+      setStatusMsg({ type: "", text: "" });
     }
   }, []);
 
-  const loadBatchConfig = useCallback(async (batchId) => {
-    const normalized = normalizeBatchId(batchId);
-    if (!normalized) return;
+  const applyConfigToValues = useCallback((data, fallbackBatch = "") => {
+    setValues({
+      batch: data?.batch ?? fallbackBatch ?? "",
+      ambientTemp: data?.ambientTemp ?? "",
+      ambientHum: data?.ambientHum ?? "",
+      soilMoisture: data?.soilMoisture ?? "",
+      soilTemp: data?.soilTemp ?? "",
+      uvStart: data?.uvStart ?? "",
+      uvDuration: data?.uvDuration ?? "",
+      ledStart: data?.ledStart ?? "",
+      ledDuration: data?.ledDuration ?? "",
+    });
+  }, []);
 
-    try {
-      const data = await getBatchConfiguration(normalized);
+  const loadBatchConfig = useCallback(
+    async (batchId) => {
+      const normalized = normalizeBatchId(batchId);
+      if (!normalized) return;
 
-      setValues({
-        batch: data.batch ?? normalized,
-        ambientTemp: data.ambientTemp ?? 25.0,
-        ambientHum: data.ambientHum ?? 70.0,
-        soilMoisture: data.soilMoisture ?? 35.0,
-        soilTemp: data.soilTemp ?? 22.0,
-        uvStart: data.uvStart ?? "07:00",
-        uvDuration: data.uvDuration ?? 90,
-        ledStart: data.ledStart ?? "18:00",
-        ledDuration: data.ledDuration ?? 360,
-      });
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setValues((prev) => ({
-          ...prev,
-          batch: normalized,
-        }));
-      } else {
-        console.error(err);
+      try {
+        const data = await getBatchConfiguration(normalized);
+
+        if (!data) {
+          // Keep current parameter values.
+          // Only update the batch field so the user can type a new batch name
+          // without wiping the previously loaded configuration.
+          setValues((prev) => ({
+            ...prev,
+            batch: normalized,
+          }));
+          return;
+        }
+
+        applyConfigToValues(data, normalized);
+      } catch (err) {
+        console.error("loadBatchConfig error:", err);
       }
-    }
-  }, []);
+    },
+    [applyConfigToValues],
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -138,20 +151,10 @@ export const useParametersLogic = () => {
         ]);
 
         if (activeConfig) {
-          setValues({
-            batch: activeConfig.batch ?? "",
-            ambientTemp: activeConfig.ambientTemp ?? 20,
-            ambientHum: activeConfig.ambientHum ?? 50,
-            soilMoisture: activeConfig.soilMoisture ?? 60,
-            soilTemp: activeConfig.soilTemp ?? 25,
-            uvStart: activeConfig.uvStart ?? "07:00",
-            uvDuration: activeConfig.uvDuration ?? 90,
-            ledStart: activeConfig.ledStart ?? "18:00",
-            ledDuration: activeConfig.ledDuration ?? 90,
-          });
-
+          applyConfigToValues(activeConfig, activeConfig.batch ?? "");
           determineLockState(activeConfig.batch, batchList);
         } else {
+          setValues(initialValues);
           determineLockState("", batchList);
         }
       } catch (error) {
@@ -162,12 +165,15 @@ export const useParametersLogic = () => {
     };
 
     init();
-  }, [determineLockState, refreshBatches]);
+  }, [applyConfigToValues, determineLockState, initialValues, refreshBatches]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
       const normalized = normalizeBatchId(values.batch);
-      if (!normalized) return;
+      if (!normalized) {
+        determineLockState("", batches);
+        return;
+      }
 
       setCheckingStatus(true);
       try {
@@ -212,7 +218,7 @@ export const useParametersLogic = () => {
       setStatusMsg({
         type: "warning",
         text: `Cannot create a new batch while the latest batch (${getBatchDisplayId(
-          latestBatch
+          latestBatch,
         )}) is still ongoing.`,
       });
       return;
@@ -221,7 +227,7 @@ export const useParametersLogic = () => {
     try {
       setStatusMsg({
         type: "info",
-        text: "AI is calculating germination timeline...",
+        text: "Saving batch first, then configuration, then syncing to Raspberry Pi...",
       });
 
       const startTime = performance.now();
@@ -234,15 +240,17 @@ export const useParametersLogic = () => {
       const aiPrediction = mlData.predicted_days;
       const calculatedLatency = Math.round(performance.now() - startTime);
 
+      // 1. CREATE BATCH FIRST
       await createBatch({
         batch_id: batchId,
         date_planted: new Date().toISOString(),
-        predicted_days: aiPrediction,
+        predicted_days: aiPrediction ?? null,
         latency_ms: calculatedLatency,
       });
 
+      // 2. SAVE CONFIG USING PUBLIC batch_id, NOT DB id
       await saveConfiguration({
-        batch: batchId,
+        batchId: batchId,
         ambientTemp: Number(values.ambientTemp),
         ambientHum: Number(values.ambientHum),
         soilMoisture: Number(values.soilMoisture),
@@ -253,6 +261,7 @@ export const useParametersLogic = () => {
         ledDuration: Number(values.ledDuration),
       });
 
+      // 3. SYNC TO PYTHON / RPI
       await syncParameters({
         ...values,
         batch: batchId,
@@ -267,9 +276,15 @@ export const useParametersLogic = () => {
       });
     } catch (error) {
       console.error(error);
+
+      const backendMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.batch_id?.[0] ||
+        "Integration error. Check server connections.";
+
       setStatusMsg({
         type: "danger",
-        text: "Integration error. Check server connections.",
+        text: backendMessage,
       });
     }
   };

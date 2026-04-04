@@ -158,7 +158,6 @@ export function MetricGrid() {
       title: "Pechay Count",
       value: liveData.pechay_detected || 0,
       badgeText: "Live",
-      subLeft: liveData.batch ? `Batch: ${liveData.batch}` : "YOLOv8",
       icon: "🥬",
     },
   ];
