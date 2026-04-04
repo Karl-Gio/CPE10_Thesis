@@ -9,21 +9,18 @@ DATASET_FOLDER = "CapturedImage"
 ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 115200
     
-LARAVEL_API_URL = "http://127.0.0.1:8000/api/parameters"
-LARAVEL_UPDATE_GERMINATION_DATE_URL = "http://127.0.0.1:8000/api/batches/latest/germination-date"
+LARAVEL_API_URL = "http://127.0.0.1:8000/api/public/parameters"
+LARAVEL_UPDATE_GERMINATION_DATE_URL = "http://127.0.0.1:8000/api/public/batches/germination-date"
 TESTING_VALUES_API_URL = "http://127.0.0.1:8000/api/testing-values"
 ACTIVE_CONFIG_URL = "http://127.0.0.1:8000/api/configurations/active"
 BATCHES_API_BASE = "http://127.0.0.1:8000/api/batches"
 
-INFERENCE_INTERVAL = 1800
-INFERENCE_DURATION = 300
+# INFERENCE_INTERVAL = 9600
+INFERENCE_INTERVAL = 60
+INFERENCE_DURATION = 30
 
 GERMINATION_MIN_COUNT = 1
 GERMINATION_CONFIRM_FRAMES = 3
-
-START_DATE = date(2026, 3, 27)
-LOCATION_TEXT_1 = "Cabuyao City, Laguna"
-LOCATION_TEXT_2 = "Calabarzon"
 
 DEFAULT_PARAMS = {
     "batch": "Batch A",
