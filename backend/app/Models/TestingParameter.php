@@ -11,6 +11,7 @@ class TestingParameter extends Model
 
     protected $fillable = [
         'user_id',
+        'batch',
         'ambient_temp',
         'humidity',
         'soil_moisture',
@@ -22,6 +23,7 @@ class TestingParameter extends Model
 
     protected $casts = [
         'user_id' => 'integer',
+        'batch' => 'string',
         'ambient_temp' => 'float',
         'humidity' => 'float',
         'soil_moisture' => 'float',

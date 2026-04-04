@@ -15,6 +15,8 @@ return new class extends Migration
                 ->constrained()
                 ->cascadeOnDelete();
 
+            $table->string('batch')->unique();
+
             $table->decimal('ambient_temp', 8, 2)->nullable();
             $table->decimal('humidity', 8, 2)->nullable();
             $table->decimal('soil_moisture', 8, 2)->nullable();
