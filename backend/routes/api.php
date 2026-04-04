@@ -12,6 +12,15 @@ use App\Http\Controllers\TestingParameterValueController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::prefix('testing-values')->group(function () {
+    Route::post('/', [TestingParameterValueController::class, 'store']);
+    Route::get('/', [TestingParameterValueController::class, 'index']);
+    Route::get('/latest', [TestingParameterValueController::class, 'latest']);
+});
+
+Route::post('/public/parameters', [ParameterController::class, 'publicStore']);
+Route::patch('/public/batches/germination-date', [BatchController::class, 'publicUpdateGerminationDate']);
+
 // Protected
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -39,10 +48,4 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/testing-parameters/latest', [TestingParameterController::class, 'latest']);
     Route::apiResource('testing-parameters', TestingParameterController::class);
-
-    Route::prefix('testing-values')->group(function () {
-        Route::post('/', [TestingParameterValueController::class, 'store']);
-        Route::get('/', [TestingParameterValueController::class, 'index']);
-        Route::get('/latest', [TestingParameterValueController::class, 'latest']);
-    });
 });

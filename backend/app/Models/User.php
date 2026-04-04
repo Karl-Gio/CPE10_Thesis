@@ -32,4 +32,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(ParameterConfiguration::class);
     }
+
+    public function testingParameters()
+    {
+        return $this->hasMany(\App\Models\TestingParameter::class);
+    }
 }
