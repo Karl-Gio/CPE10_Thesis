@@ -29,6 +29,8 @@ class SystemService:
     def __init__(self):
         self.lock = threading.Lock()
 
+        self.system_shutdown = False
+
         self.camera_active = False
         self.is_processing = False
         self.view_mode = "normal"
@@ -213,6 +215,10 @@ class SystemService:
         if not self.params_saved_once:
             return False
 
+        if getattr(self, "system_shutdown", False) and reason != "hardware auto resume":
+            print("⛔ Command send skipped: system is shutdown")
+            return False
+
         now = datetime.now()
         command, uv_on, led_on = self.build_command(self.current_params, now)
 
@@ -240,40 +246,52 @@ class SystemService:
         except Exception as e:
             print(f"❌ Exception sending command: {e}")
             return False
-
+    
     def build_laravel_payload(self):
         with self.lock:
             payload = {
-                "Ambient_Temperature": self.safe_float(self.latest_stats.get("temp", 0.0)),
-                "Relative_Humidity": self.safe_float(self.latest_stats.get("hum", 0.0)),
-                "Soil_Temperature": self.safe_float(self.latest_stats.get("sTEMP", 0.0)),
-                "Soil_Moisture": self.safe_float(self.latest_stats.get("sMOIST", 0.0)),
-                "Light_Intensity": self.safe_float(self.latest_stats.get("lux", 0.0)),
-                "Pechay_Count": self.safe_int(self.max_detected),
-                "Batch": self.current_params.get("batch", "Batch A")
+                "batch_id": self.safe_int(self.current_params.get("batch_id")),
+                "ambient_temp": self.safe_float(self.latest_stats.get("temp", 0.0)),
+                "humidity": self.safe_float(self.latest_stats.get("hum", 0.0)),
+                "soil_temp": self.safe_float(self.latest_stats.get("sTEMP", 0.0)),
+                "soil_moisture": self.safe_float(self.latest_stats.get("sMOIST", 0.0)),
+                "light_intensity": self.safe_float(self.latest_stats.get("lux", 0.0)),
+                "pechay_count": self.safe_int(self.max_detected),
             }
         return payload
 
     def save_to_laravel(self):
         try:
+            # stop saving when system is shutdown
+            if getattr(self, "system_shutdown", False):
+                print("⛔ Skipping save: system is shutdown")
+                return False
+
+            # optional: also skip during testing if you want testing logs separate only
+            if self.testing_active:
+                print("⛔ Skipping normal Laravel save: testing session is active")
+                return False
+
             payload = self.build_laravel_payload()
 
             all_zero = all([
-                payload["Ambient_Temperature"] == 0,
-                payload["Relative_Humidity"] == 0,
-                payload["Soil_Temperature"] == 0,
-                payload["Soil_Moisture"] == 0,
-                payload["Light_Intensity"] == 0,
-                payload["Pechay_Count"] == 0
+                payload["ambient_temp"] == 0,
+                payload["humidity"] == 0,
+                payload["soil_temp"] == 0,
+                payload["soil_moisture"] == 0,
+                payload["light_intensity"] == 0,
+                payload["pechay_count"] == 0
             ])
 
             if all_zero:
-                print("Skipping save: ALL values are 0")
+                print("⛔ Skipping save: ALL values are 0")
                 return False
 
             if self.last_saved_payload == payload:
-                print("Skipping save: no changes")
+                print("⛔ Skipping save: no changes")
                 return False
+
+            print("📦 Laravel payload:", payload)
 
             response = requests.post(
                 LARAVEL_API_URL,
@@ -284,12 +302,14 @@ class SystemService:
             if response.ok:
                 self.last_saved_payload = payload
                 self.last_saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
                 with self.lock:
                     self.latest_stats["last_saved_at"] = self.last_saved_at
+
                 print("✅ Saved to Laravel:", payload)
                 return True
 
-            print(f"❌ Laravel save failed: {response.status_code} {response.text}")
+            print(f"❌ Laravel save failed: {response.status_code} {response.text[:300]}")
             return False
 
         except Exception as e:
@@ -299,39 +319,44 @@ class SystemService:
     def build_testing_payload(self, session_data):
         with self.lock:
             payload = {
-                "batch": str(session_data.get("batch", "Batch A")).strip(),
+                "testing_parameter_id": self.safe_int(session_data.get("testing_parameter_id")),
 
-                # targets from React
-                "ambient_temp_target": self.safe_float(session_data.get("ambient_temp")),
-                "ambient_humidity_target": self.safe_float(session_data.get("ambient_humidity")),
-                "soil_moisture_target": self.safe_float(session_data.get("soil_moisture")),
-                "soil_temp_target": self.safe_float(session_data.get("soil_temp")),
-                "uv": self.safe_int(session_data.get("uv")),
-                "led": self.safe_int(session_data.get("led")),
-                "duration": self.safe_int(session_data.get("duration"), 30),
-
-                # actual live readings from Arduino/sensors
                 "ambient_temp_actual": self.safe_float(self.latest_stats.get("temp", 0.0)),
-                "ambient_humidity_actual": self.safe_float(self.latest_stats.get("hum", 0.0)),
+                "humidity_actual": self.safe_float(self.latest_stats.get("hum", 0.0)),
                 "soil_temp_actual": self.safe_float(self.latest_stats.get("sTEMP", 0.0)),
                 "soil_moisture_actual": self.safe_float(self.latest_stats.get("sMOIST", 0.0)),
                 "light_intensity": self.safe_float(self.latest_stats.get("lux", 0.0)),
-                "pump": self.latest_stats.get("pump", 0),
 
                 "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
 
         return payload
-
+    
     def save_testing_log_to_laravel(self, payload):
         try:
-            response = requests.post(TESTING_VALUES_API_URL, json=payload, timeout=10)
+            if getattr(self, "system_shutdown", False):
+                print("⛔ Testing log skipped: system is shutdown")
+                return False
+
+            response = requests.post(
+                TESTING_VALUES_API_URL,
+                json=payload,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                timeout=10
+            )
 
             if response.ok:
                 print("✅ Testing log saved to Laravel:", payload)
                 return True
 
-            print(f"❌ Testing log save failed: {response.status_code} {response.text}")
+            try:
+                print(f"❌ Testing log save failed: {response.status_code} | {response.json()}")
+            except Exception:
+                print(f"❌ Testing log save failed: {response.status_code} | {response.text[:300]}")
+
             return False
 
         except Exception as e:
@@ -365,13 +390,18 @@ class SystemService:
             print("====================================")
             print("🧪 TESTING SESSION STARTED")
             print(f"📦 Batch: {batch}")
+            print(f"🆔 Testing Parameter ID: {session_data.get('testing_parameter_id')}")
             print(f"⏱ Duration: {duration_minutes} minute(s)")
             print(f"📡 Logging interval: {interval_seconds} second(s) (~30 logs total)")
             print(f"🕐 Start: {self.testing_started_at.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"🕐 End:   {self.testing_ends_at.strftime('%Y-%m-%d %H:%M:%S')}")
             print("====================================")
 
-            while self.testing_active and datetime.now() < self.testing_ends_at:
+            while (
+                self.testing_active
+                and not getattr(self, "system_shutdown", False)
+                and datetime.now() < self.testing_ends_at
+            ):
                 try:
                     payload = self.build_testing_payload(session_data)
                     self.save_testing_log_to_laravel(payload)
@@ -379,13 +409,20 @@ class SystemService:
                     print(f"⚠️ Testing session loop error: {e}")
 
                 slept = 0
-                while self.testing_active and slept < interval_seconds:
+                while (
+                    self.testing_active
+                    and not getattr(self, "system_shutdown", False)
+                    and slept < interval_seconds
+                ):
                     if datetime.now() >= self.testing_ends_at:
                         break
                     time.sleep(1)
                     slept += 1
 
-            print("🛑 Testing session finished.")
+            if getattr(self, "system_shutdown", False):
+                print("⛔ Testing session stopped because system is shutdown.")
+            else:
+                print("🛑 Testing session finished.")
 
         except Exception as e:
             print(f"❌ Testing session worker failed: {e}")
@@ -396,10 +433,21 @@ class SystemService:
 
             with self.lock:
                 self.latest_stats["testing_active"] = False
-                self.latest_stats["mode"] = "IDLE"
+                self.latest_stats["mode"] = "SHUTDOWN" if getattr(self, "system_shutdown", False) else "MANUAL"
 
             self.testing_started_at = None
             self.testing_ends_at = None
+
+            try:
+                print("🚦 Sending SEQ_SHUTDOWN after testing finished...")
+                ok = self.sensor.send_command("SEQ_SHUTDOWN")
+
+                if ok:
+                    print("✅ SEQ_SHUTDOWN sent successfully.")
+                else:
+                    print("❌ Failed to send SEQ_SHUTDOWN.")
+            except Exception as e:
+                print(f"❌ Error sending SEQ_SHUTDOWN after testing: {e}")
 
     def start_testing_session(self, data):
         try:
@@ -407,6 +455,13 @@ class SystemService:
                 return {
                     "status": "error",
                     "message": "A testing session is already running."
+                }, 400
+
+            testing_parameter_id = self.safe_int(data.get("testing_parameter_id"))
+            if testing_parameter_id < 1:
+                return {
+                    "status": "error",
+                    "message": "testing_parameter_id is required."
                 }, 400
 
             batch = str(data.get("batch", "Batch A")).strip()
@@ -419,7 +474,7 @@ class SystemService:
                 }, 400
 
             ambient_temp = self.safe_float(data.get("ambient_temp"))
-            ambient_hum = self.safe_float(data.get("ambient_humidity"))
+            ambient_hum = self.safe_float(data.get("humidity"))
             soil_moisture = self.safe_float(data.get("soil_moisture"))
             soil_temp = self.safe_float(data.get("soil_temp"))
             uv = self.safe_int(data.get("uv"))
@@ -500,28 +555,112 @@ class SystemService:
             "interval_seconds": self.testing_interval_seconds
         }
 
-    def save_actual_germination_date(self, _unused=None):
+    def save_actual_germination_date(self, batch_name=None):
         try:
+            current_batch = str(batch_name or self.current_params.get("batch", "Batch A")).strip()
+            batch_id = self.safe_int(self.current_params.get("batch_id"))
+
+            # Stop repeat attempts for this batch if already handled
+            if self.germination_saved_for_batch.get(current_batch, False):
+                return True
+
             payload = {
+                "batch_id": batch_id, 
                 "germinated": True
             }
 
             response = requests.patch(
                 LARAVEL_UPDATE_GERMINATION_DATE_URL,
                 json=payload,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
                 timeout=10
             )
 
             if response.ok:
-                print("✅ Germination confirmed and saved by Laravel")
+                with self.lock:
+                    self.germination_saved_for_batch[current_batch] = True
+                    self.latest_stats["germination_saved"] = True
+
+                print(f"✅ Germination confirmed and saved once for {current_batch}")
                 return True
 
-            print(f"❌ Failed to save germination date: {response.status_code} {response.text}")
+            print(f"❌ Failed to save germination date: {response.status_code} {response.text[:300]}")
             return False
 
         except Exception as e:
             print(f"❌ Error saving actual germination date: {e}")
             return False
+
+    def handle_germination_detected(self, batch_name=None):
+        try:
+            current_batch = str(batch_name or self.current_params.get("batch", "Batch A")).strip()
+
+            # already handled for this batch
+            if self.germination_saved_for_batch.get(current_batch, False):
+                print(f"ℹ️ Germination already handled for {current_batch}")
+                return {
+                    "status": "success",
+                    "message": f"Germination already handled for {current_batch}.",
+                    "batch": current_batch,
+                    "already_handled": True
+                }, 200
+
+            print("====================================")
+            print("🌱 GERMINATION DETECTED EARLY")
+            print(f"📦 Batch: {current_batch}")
+            print("💾 Saving final data before shutdown...")
+            print("====================================")
+
+            # stop inference immediately
+            self.is_processing = False
+            self.inference_start_time = None
+            self.last_inference_end = time.time()
+            self.manual_override = True
+
+            with self.lock:
+                self.latest_stats["is_processing"] = False
+                self.latest_stats["manual_override"] = True
+                self.latest_stats["mode"] = "GERMINATED"
+
+            # save final normal snapshot BEFORE shutdown
+            final_save_ok = self.save_to_laravel()
+
+            # save germination event/date BEFORE shutdown
+            germination_save_ok = self.save_actual_germination_date(current_batch)
+
+            print(f"📌 final_save_ok = {final_save_ok}")
+            print(f"📌 germination_save_ok = {germination_save_ok}")
+
+            # reset counters after handling
+            self.max_detected = 0
+            self.germination_confirm_counter = 0
+
+            with self.lock:
+                self.latest_stats["germination_confirm_counter"] = 0
+                self.latest_stats["germination_saved"] = self.germination_saved_for_batch.get(current_batch, False)
+
+            # shutdown only AFTER saves
+            shutdown_response, shutdown_status = self.sequential_shutdown()
+
+            return {
+                "status": "success" if (final_save_ok or germination_save_ok) else "error",
+                "message": "Germination handled. Final data saved before shutdown.",
+                "batch": current_batch,
+                "final_save_ok": final_save_ok,
+                "germination_save_ok": germination_save_ok,
+                "shutdown_status": shutdown_status,
+                "shutdown_response": shutdown_response
+            }, 200 if (final_save_ok or germination_save_ok) else 500
+
+        except Exception as e:
+            print(f"❌ handle_germination_detected error: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }, 500
 
     def sync_params_from_laravel(self):
         print("🔄 Syncing parameters from Laravel database...")
@@ -530,9 +669,12 @@ class SystemService:
             response = requests.get(ACTIVE_CONFIG_URL, timeout=5)
             if response.ok:
                 data = response.json()
+                print("🔍 ACTIVE CONFIG DATA:", data)
 
-                led_start = data.get("ledStart", "17:00")
-                led_dur = self.safe_int(data.get("ledDuration", 360))
+                led_start = data.get("led_start", "17:00")
+                led_dur = self.safe_int(data.get("led_duration", 360))
+                uv_start = data.get("uv_start", "07:00")
+                uv_dur = self.safe_int(data.get("uv_duration", 120))
 
                 try:
                     start_dt = datetime.strptime(led_start, "%H:%M")
@@ -542,14 +684,15 @@ class SystemService:
                     led_end_str = "06:00"
 
                 self.current_params.update({
+                    "batch_id": data.get("batch_id"),
                     "batch": data.get("batch", "Batch A"),
-                    "datePlanted": data.get("datePlanted", datetime.now().strftime("%Y-%m-%d")),
-                    "ambientTemp": self.safe_float(data.get("ambientTemp")),
-                    "ambientHum": self.safe_float(data.get("ambientHum")),
-                    "soilMoisture": self.safe_float(data.get("soilMoisture")),
-                    "soilTemp": self.safe_float(data.get("soilTemp")),
-                    "uvStart24": data.get("uvStart", "07:00"),
-                    "uvDurationMinutes": self.safe_int(data.get("uvDuration", 120)),
+                    "datePlanted": data.get("date_planted", datetime.now().strftime("%Y-%m-%d")),
+                    "ambientTemp": self.safe_float(data.get("ambient_temp")),
+                    "ambientHum": self.safe_float(data.get("humidity")),
+                    "soilMoisture": self.safe_float(data.get("soil_moisture")),
+                    "soilTemp": self.safe_float(data.get("soil_temp")),
+                    "uvStart24": uv_start,
+                    "uvDurationMinutes": uv_dur,
                     "ledStart24": led_start,
                     "ledEnd24": led_end_str,
                     "ledDuration": led_dur
@@ -591,7 +734,7 @@ class SystemService:
         print("📅 Schedule Monitor Started - checking every 5 seconds")
         while True:
             try:
-                if self.params_saved_once:
+                if not self.system_shutdown and self.params_saved_once:
                     self.send_command_if_changed(force=False, reason="schedule monitor")
             except Exception as e:
                 print(f"⚠️ Schedule monitor error: {e}")
@@ -703,10 +846,19 @@ class SystemService:
                 self.latest_stats["germination_confirm_counter"] = 0
                 self.latest_stats["pechay_detected"] = 0
                 self.latest_stats["confidenceScore"] = 0
+                self.latest_stats["is_processing"] = False
+                self.latest_stats["camera_active"] = False
+                self.latest_stats["mode"] = "CAMERA_OFF"
+                self.latest_stats["remaining_inference_sec"] = 0
+
+        else:
+            with self.lock:
+                self.latest_stats["camera_active"] = True
+                self.latest_stats["mode"] = "IDLE"
 
         print(f"Camera toggled: {self.camera_active}")
         return {"status": self.camera_active}
-
+    
     def toggle_view(self):
         self.view_mode = "masked" if self.view_mode == "normal" else "normal"
         return {"status": "success", "mode": self.view_mode}
@@ -763,6 +915,7 @@ class SystemService:
                 self.germination_saved_for_batch[batch_name] = False
 
             self.current_params.update({
+                "batch_id": data.get("batch_id"),
                 "batch": batch_name,
                 "ambientTemp": amb_temp,
                 "ambientHum": amb_hum,
@@ -856,6 +1009,13 @@ class SystemService:
 
     def sequential_shutdown(self):
         try:
+            print("🛑 SYSTEM-WIDE SEQUENTIAL SHUTDOWN INITIATED")
+
+            self.system_shutdown = True
+
+            # stop everything
+            self.testing_active = False
+            self.camera_active = False
             self.is_processing = False
             self.inference_start_time = None
             self.max_detected = 0
@@ -865,31 +1025,34 @@ class SystemService:
             ok = self.sensor.send_command("SEQ_SHUTDOWN")
 
             if not ok:
-                return {
-                    "status": "error",
-                    "message": "Failed to send SEQ_SHUTDOWN to Arduino."
-                }, 500
+                return {"status": "error"}, 500
 
             with self.lock:
-                self.latest_stats["manual_override"] = True
-                self.latest_stats["mode"] = "MANUAL"
-                self.latest_stats["germination_confirm_counter"] = 0
+                self.latest_stats["mode"] = "SHUTDOWN"
 
-            return {
-                "status": "success",
-                "message": "Sequential shutdown command sent.",
-                "command": "SEQ_SHUTDOWN"
-            }, 200
+            print("✅ Shutdown done. Will auto-resume in 1 sec...")
+
+            # 🔥 AUTO UNLOCK TIMER
+            threading.Thread(target=self._auto_resume_after_shutdown, daemon=True).start()
+
+            return {"status": "success"}, 200
 
         except Exception as e:
-            print(f"❌ /api/sequential_shutdown error: {e}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }, 500
+            print(e)
+            return {"status": "error"}, 500
+        
+    def _auto_resume_after_shutdown(self):
+        time.sleep(1)  # ⏱ wait 1 second
+
+        print("🔄 Auto-resuming system...")
+
+        # call your existing recovery
+        self.hardware_auto()
 
     def hardware_auto(self):
         try:
+            print("🔄 Returning system to AUTO mode...")
+
             ok = self.sensor.send_command("AUTO")
             if not ok:
                 return {
@@ -897,16 +1060,32 @@ class SystemService:
                     "message": "Failed to send AUTO to Arduino."
                 }, 500
 
+            # only reopen system after Arduino accepts AUTO
+            self.system_shutdown = False
+
             self.manual_override = False
+            self.testing_active = False
+            self.is_processing = False
+            self.inference_start_time = None
+            self.max_detected = 0
+            self.germination_confirm_counter = 0
 
             with self.lock:
                 self.latest_stats["manual_override"] = False
+                self.latest_stats["testing_active"] = False
+                self.latest_stats["is_processing"] = False
+                self.latest_stats["camera_active"] = self.camera_active
                 self.latest_stats["mode"] = "IDLE"
+                self.latest_stats["germination_confirm_counter"] = 0
+
+            if self.params_saved_once:
+                self.send_command_if_changed(force=True, reason="hardware auto resume")
 
             return {
                 "status": "success",
-                "message": "Arduino returned to AUTO mode.",
-                "command": "AUTO"
+                "message": "System returned to AUTO mode.",
+                "command": "AUTO",
+                "system_shutdown": False
             }, 200
 
         except Exception as e:
@@ -915,7 +1094,7 @@ class SystemService:
                 "status": "error",
                 "message": str(e)
             }, 500
-        
+
     def manual_hardware(self, data):
         try:
             uv = self.safe_int(data.get("uv"))
