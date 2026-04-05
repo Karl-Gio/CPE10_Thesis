@@ -1011,57 +1011,43 @@ class SystemService:
         try:
             print("🛑 SYSTEM-WIDE SEQUENTIAL SHUTDOWN INITIATED")
 
-            # 🔴 GLOBAL STOP FLAG
             self.system_shutdown = True
 
-            # 🧪 Stop testing
+            # stop everything
             self.testing_active = False
-            self.testing_thread = None
-
-            # 📷 Stop camera + inference
             self.camera_active = False
             self.is_processing = False
             self.inference_start_time = None
-
-            # 🧠 Reset detection counters
             self.max_detected = 0
             self.germination_confirm_counter = 0
-
-            # 🎛 Force manual override
             self.manual_override = True
 
-            # 📡 Send shutdown to Arduino
             ok = self.sensor.send_command("SEQ_SHUTDOWN")
 
             if not ok:
-                return {
-                    "status": "error",
-                    "message": "Failed to send SEQ_SHUTDOWN to Arduino."
-                }, 500
+                return {"status": "error"}, 500
 
-            # 📊 Update system state
             with self.lock:
-                self.latest_stats["manual_override"] = True
-                self.latest_stats["testing_active"] = False
-                self.latest_stats["is_processing"] = False
-                self.latest_stats["camera_active"] = False
                 self.latest_stats["mode"] = "SHUTDOWN"
-                self.latest_stats["germination_confirm_counter"] = 0
 
-            print("✅ System shutdown complete: schedules, testing, and logging stopped.")
+            print("✅ Shutdown done. Will auto-resume in 1 sec...")
 
-            return {
-                "status": "success",
-                "message": "System fully shutdown. No schedules or logs will run.",
-                "command": "SEQ_SHUTDOWN"
-            }, 200
+            # 🔥 AUTO UNLOCK TIMER
+            threading.Thread(target=self._auto_resume_after_shutdown, daemon=True).start()
+
+            return {"status": "success"}, 200
 
         except Exception as e:
-            print(f"❌ /api/sequential_shutdown error: {e}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }, 500
+            print(e)
+            return {"status": "error"}, 500
+        
+    def _auto_resume_after_shutdown(self):
+        time.sleep(1)  # ⏱ wait 1 second
+
+        print("🔄 Auto-resuming system...")
+
+        # call your existing recovery
+        self.hardware_auto()
 
     def hardware_auto(self):
         try:
@@ -1108,7 +1094,7 @@ class SystemService:
                 "status": "error",
                 "message": str(e)
             }, 500
-    
+
     def manual_hardware(self, data):
         try:
             uv = self.safe_int(data.get("uv"))
