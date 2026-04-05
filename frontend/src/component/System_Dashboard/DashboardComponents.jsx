@@ -22,7 +22,6 @@ import {
   fetchLatestStats,
   fetchActiveConfig,
 } from "./dashboardHelpers";
-import "./DashboardComponents.css";
 
 ChartJS.register(
   CategoryScale,
@@ -47,7 +46,7 @@ function MetricCard({
     badgeText === "Warning" || badgeText === "Dry" ? "danger" : "success";
 
   return (
-    <Card className="dw-card shadow-sm h-100 border-0 rounded-4">
+    <Card className="dw-card shadow-sm h-100 border-0 rounded-4 mt-2">
       <Card.Body>
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="dw-card-title text-uppercase small text-muted fw-bold">

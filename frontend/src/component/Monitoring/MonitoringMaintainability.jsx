@@ -70,6 +70,37 @@ const METRIC_CONFIG = {
   },
 };
 
+const HEATMAP_METRICS = [
+  {
+    key: "ambientTemp",
+    label: "Ambient Temp",
+    targetKey: "ambientTemp",
+    unit: "°C",
+    scale: 3,
+  },
+  {
+    key: "ambientHum",
+    label: "Humidity",
+    targetKey: "ambientHum",
+    unit: "%",
+    scale: 5,
+  },
+  {
+    key: "soilTemp",
+    label: "Soil Temp",
+    targetKey: "soilTemp",
+    unit: "°C",
+    scale: 3,
+  },
+  {
+    key: "soilMoisture",
+    label: "Soil Moisture",
+    targetKey: "soilMoisture",
+    unit: "%",
+    scale: 5,
+  },
+];
+
 export default function MonitoringMaintainability() {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState("");
@@ -124,7 +155,7 @@ export default function MonitoringMaintainability() {
 
   const rawChartData = useMemo(
     () => buildChartData(monitoringData),
-    [monitoringData]
+    [monitoringData],
   );
 
   const chartData = useMemo(() => {
@@ -139,38 +170,32 @@ export default function MonitoringMaintainability() {
 
   const ambientDomain = useMemo(
     () => getMetricDomain(chartData, "ambientTemp", "ambientTempTarget", 0.3),
-    [chartData]
+    [chartData],
   );
 
   const humidityDomain = useMemo(
     () => getMetricDomain(chartData, "ambientHum", "ambientHumTarget", 0.5),
-    [chartData]
+    [chartData],
   );
 
   const soilTempDomain = useMemo(
     () => getMetricDomain(chartData, "soilTemp", "soilTempTarget", 0.3),
-    [chartData]
+    [chartData],
   );
 
   const soilMoistureDomain = useMemo(
-    () =>
-      getMetricDomain(
-        chartData,
-        "soilMoisture",
-        "soilMoistureTarget",
-        0.5
-      ),
-    [chartData]
+    () => getMetricDomain(chartData, "soilMoisture", "soilMoistureTarget", 0.5),
+    [chartData],
   );
 
   const isLoading = loadingBatches || loadingMonitoring;
 
   return (
     <div className="mm-page">
-      <Container fluid="xl" className="py-4 py-lg-5">
+      <Container fluid="xl" className="mm-shell py-4 py-xl-5">
         <section className="mm-hero mb-4">
           <div className="mm-hero-copy">
-            <div className="mm-eyebrow">System Monitoring</div>
+            <span className="mm-eyebrow">System Monitoring</span>
             <h1 className="mm-title">Maintainability Dashboard</h1>
             <p className="mm-subtitle">
               Track target stability, detect micro-variance, and review batch
@@ -179,7 +204,7 @@ export default function MonitoringMaintainability() {
           </div>
 
           <div className="mm-toolbar">
-            <Form.Group>
+            <Form.Group className="mm-filter-group">
               <Form.Label className="mm-label">Batch</Form.Label>
               <Form.Select
                 value={selectedBatch}
@@ -199,7 +224,7 @@ export default function MonitoringMaintainability() {
         </section>
 
         {isLoading && (
-          <Alert variant="light" className="mm-alert">
+          <Alert variant="light" className="mm-alert mm-alert-soft">
             <div className="mm-inline-status">
               <Spinner animation="border" size="sm" />
               <span>Loading monitoring data...</span>
@@ -215,7 +240,7 @@ export default function MonitoringMaintainability() {
 
         {monitoringData && !error && (
           <>
-            <Row className="g-3 g-lg-4 mb-4">
+            <Row className="g-3 g-xl-4 mb-4">
               <Col md={6} xl={3}>
                 <StatCard
                   label="System Status"
@@ -246,10 +271,10 @@ export default function MonitoringMaintainability() {
               </Col>
             </Row>
 
-            <Row className="g-3 g-lg-4 mb-4">
+            <Row className="g-3 g-xl-4 mb-4">
               <Col lg={6}>
                 <Card className="mm-panel h-100">
-                  <Card.Body className="p-4">
+                  <Card.Body className="mm-card-body">
                     <div className="mm-panel-head">
                       <div>
                         <div className="mm-panel-kicker">Overview</div>
@@ -258,7 +283,10 @@ export default function MonitoringMaintainability() {
                     </div>
 
                     <div className="mm-info-list">
-                      <InfoRow label="Batch Number" value={monitoringData.batchId} />
+                      <InfoRow
+                        label="Batch Number"
+                        value={monitoringData.batchId}
+                      />
                       <InfoRow
                         label="Date Planted"
                         value={formatDisplayDate(monitoringData.datePlanted)}
@@ -279,7 +307,7 @@ export default function MonitoringMaintainability() {
               {monitoringData.target && (
                 <Col lg={6}>
                   <Card className="mm-panel h-100">
-                    <Card.Body className="p-4">
+                    <Card.Body className="mm-card-body">
                       <div className="mm-panel-head">
                         <div>
                           <div className="mm-panel-kicker">Reference</div>
@@ -311,7 +339,7 @@ export default function MonitoringMaintainability() {
               )}
             </Row>
 
-            <Row className="g-3 g-lg-4">
+            <Row className="g-3 g-xl-4">
               <Col xl={6}>
                 <MetricChart
                   title={METRIC_CONFIG.ambient.title}
@@ -364,6 +392,12 @@ export default function MonitoringMaintainability() {
                 />
               </Col>
             </Row>
+
+            <Row className="g-3 g-xl-4 mt-1">
+              <Col xs={12}>
+                <BatchHeatMap monitoringData={monitoringData} />
+              </Col>
+            </Row>
           </>
         )}
       </Container>
@@ -382,8 +416,8 @@ function InfoRow({ label, value }) {
 
 function StatCard({ label, value, tone = "primary" }) {
   return (
-    <Card className={`mm-stat mm-stat-${tone}`}>
-      <Card.Body className="p-4">
+    <Card className={`mm-stat mm-stat-${tone} h-100`}>
+      <Card.Body className="mm-card-body">
         <div className="mm-stat-label">{label}</div>
         <div className="mm-stat-value">{value}</div>
       </Card.Body>
@@ -403,7 +437,7 @@ const MetricChart = React.memo(function MetricChart({
 }) {
   return (
     <Card className="mm-panel mm-chart-card h-100">
-      <Card.Body className="p-4">
+      <Card.Body className="mm-card-body">
         <div className="mm-panel-head mm-panel-head-chart mb-3">
           <div>
             <div className="mm-panel-kicker">Metric Trend</div>
@@ -416,7 +450,7 @@ const MetricChart = React.memo(function MetricChart({
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid
-                stroke="#e2e8f0"
+                stroke="#e7edf5"
                 strokeDasharray="3 3"
                 vertical={false}
               />
@@ -426,14 +460,14 @@ const MetricChart = React.memo(function MetricChart({
                 minTickGap={28}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "#64748b" }}
+                tick={{ fontSize: 11, fill: "#7c8aa5" }}
               />
               <YAxis
                 tickFormatter={formatNumber}
                 domain={domain}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "#64748b" }}
+                tick={{ fontSize: 11, fill: "#7c8aa5" }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend className="mm-chart-legend" />
@@ -442,7 +476,7 @@ const MetricChart = React.memo(function MetricChart({
                 dataKey={actualKey}
                 name="Actual"
                 stroke={actualColor}
-                strokeWidth={2.5}
+                strokeWidth={2.4}
                 dot={false}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
@@ -479,8 +513,7 @@ const CustomTooltip = React.memo(function CustomTooltip({
       {payload.map((entry, index) => (
         <div key={index} className="mm-tooltip-item">
           <span
-            className="mm-tooltip-dot"
-            style={{ backgroundColor: entry.color }}
+            className={`mm-tooltip-dot ${getTooltipDotClass(entry.color)}`}
           />
           <span className="mm-tooltip-name">{entry.name}</span>
           <strong className="mm-tooltip-value">
@@ -491,3 +524,174 @@ const CustomTooltip = React.memo(function CustomTooltip({
     </div>
   );
 });
+
+function BatchHeatMap({ monitoringData }) {
+  const history = monitoringData?.history ?? [];
+  const target = monitoringData?.target ?? null;
+
+  const heatMapRows = useMemo(() => {
+    if (!history.length || !target) return [];
+
+    return history.map((row, index) => ({
+      id: row.timestamp ?? `row-${index}`,
+      label: row.timestamp
+        ? new Date(row.timestamp).toLocaleString("en-PH", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : `Point ${index + 1}`,
+      cells: HEATMAP_METRICS.map((metric) => {
+        const actual = row?.[metric.key];
+        const targetValue = target?.[metric.targetKey];
+        const delta = getAbsoluteDeviation(actual, targetValue);
+        const normalizedScore = getNormalizedScore(delta, metric.scale);
+
+        return {
+          metricKey: metric.key,
+          metricLabel: metric.label,
+          actual,
+          target: targetValue,
+          delta,
+          normalizedScore,
+          colorClass: getHeatClass(normalizedScore),
+          unit: metric.unit,
+        };
+      }),
+    }));
+  }, [history, target]);
+
+  if (!history.length || !target) return null;
+
+  return (
+    <Card className="mm-panel">
+      <Card.Body className="mm-card-body">
+        <div className="mm-panel-head mb-3">
+          <div>
+            <div className="mm-panel-kicker">Whole Batch View</div>
+            <h3 className="mm-panel-title">Environmental Deviation Heat Map</h3>
+            <p className="mm-panel-subtitle mb-0">
+              Each cell shows how far a recorded value is from its batch target.
+              Green means closer to target; warmer colors indicate larger drift.
+            </p>
+          </div>
+        </div>
+
+        <div className="mm-heatmap-legend mb-3">
+          <LegendPill label="Very close" className="hm-very-low" />
+          <LegendPill label="Low drift" className="hm-low" />
+          <LegendPill label="Moderate drift" className="hm-medium" />
+          <LegendPill label="High drift" className="hm-high" />
+          <LegendPill label="Critical drift" className="hm-critical" />
+          <LegendPill label="No data" className="hm-empty" />
+        </div>
+
+        <div className="mm-heatmap-scroll">
+          <div className="mm-heatmap-grid mm-heatmap-grid-4">
+            <div className="mm-heatmap-head">Timestamp</div>
+            {HEATMAP_METRICS.map((metric) => (
+              <div key={metric.key} className="mm-heatmap-head">
+                {metric.label}
+              </div>
+            ))}
+
+            {heatMapRows.map((row) => (
+              <React.Fragment key={row.id}>
+                <div className="mm-heatmap-time">{row.label}</div>
+
+                {row.cells.map((cell) => (
+                  <div
+                    key={`${row.id}-${cell.metricKey}`}
+                    className={`mm-heatmap-cell ${cell.colorClass}`}
+                    title={`${cell.metricLabel}
+Actual: ${displayMetricValue(cell.actual, cell.unit)}
+Target: ${displayMetricValue(cell.target, cell.unit)}
+Deviation: ${displayMetricValue(cell.delta, cell.unit)}`}
+                  >
+                    <div className="mm-heatmap-value">
+                      {displayMetricValue(cell.actual, cell.unit)}
+                    </div>
+                    <div className="mm-heatmap-meta">
+                      tgt {displayMetricValue(cell.target, cell.unit)}
+                    </div>
+                    <div className="mm-heatmap-delta">
+                      Δ {displayMetricValue(cell.delta, cell.unit)}
+                    </div>
+                  </div>
+                ))}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </Card.Body>
+    </Card>
+  );
+}
+
+function LegendPill({ label, className }) {
+  return (
+    <div className="mm-legend-pill">
+      <span className={`mm-legend-swatch ${className}`} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function getAbsoluteDeviation(actual, target) {
+  if (
+    typeof actual !== "number" ||
+    !Number.isFinite(actual) ||
+    typeof target !== "number" ||
+    !Number.isFinite(target)
+  ) {
+    return null;
+  }
+
+  return Math.abs(actual - target);
+}
+
+function getNormalizedScore(deviation, scale = 1) {
+  if (
+    typeof deviation !== "number" ||
+    !Number.isFinite(deviation) ||
+    typeof scale !== "number" ||
+    !Number.isFinite(scale) ||
+    scale <= 0
+  ) {
+    return null;
+  }
+
+  return Math.min(deviation / scale, 1);
+}
+
+function getHeatClass(score) {
+  if (score == null) return "hm-empty";
+  if (score <= 0.15) return "hm-very-low";
+  if (score <= 0.35) return "hm-low";
+  if (score <= 0.6) return "hm-medium";
+  if (score <= 0.85) return "hm-high";
+  return "hm-critical";
+}
+
+function displayMetricValue(value, unit = "") {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(3)}${unit ? ` ${unit}` : ""}`;
+}
+
+function getTooltipDotClass(color) {
+  switch (color) {
+    case "#3b82f6":
+      return "is-blue";
+    case "#10b981":
+      return "is-green";
+    case "#8b5cf6":
+      return "is-violet";
+    case "#f97316":
+      return "is-orange";
+    case "#f43f5e":
+      return "is-rose";
+    default:
+      return "";
+  }
+}

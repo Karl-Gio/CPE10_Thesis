@@ -1,6 +1,7 @@
 import Container from "react-bootstrap/Container";
 import { MetricGrid, TrendsAndHealth } from "./DashboardComponents";
 import { SideBar, DashboardHeader } from "../Layout/LayoutComponents";
+import "./DashboardComponents.css";
 
 function DashboardPage() {
   return (
@@ -9,9 +10,17 @@ function DashboardPage() {
 
       <div className="flex-grow-1">
         <DashboardHeader title="System Dashboard" />
-        <Container fluid style={{ maxWidth: "1200px" }}>        
-          <MetricGrid />
-          <TrendsAndHealth />
+
+        <Container fluid className="dw-container">
+          <div className="dw-content">
+            <div className="dw-section">
+              <MetricGrid />
+            </div>
+
+            <div className="dw-section">
+              <TrendsAndHealth />
+            </div>
+          </div>
         </Container>
       </div>
     </div>
