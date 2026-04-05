@@ -10,7 +10,7 @@ function MaintainabilityPage() {
       <div className="flex-grow-1">
         <DashboardHeader title="Maintainability Monitoring" />
 
-        <Container fluid style={{ maxWidth: "1400px" }}>
+        <Container fluid>
           <MonitoringMaintainability />
         </Container>
       </div>

@@ -4,6 +4,7 @@ import Badge from "react-bootstrap/Badge";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useEffect, useState } from "react";
+import "./LayoutComponents.css";
 
 /* ---------------- Sidebar ---------------- */
 
@@ -30,73 +31,70 @@ export function SideBar() {
     }
   };
 
-  const linkStyle = ({ isActive }) => ({
-    display: "block",
-    padding: "10px 12px",
-    borderRadius: 10,
-    textDecoration: "none",
-    color: isActive ? "#198754" : "#cbd5e1",
-    background: isActive ? "rgba(25,135,84,0.12)" : "transparent",
-    fontWeight: isActive ? 700 : 600,
-    transition: "all 0.2s ease",
-  });
-
   return (
-    <div
-      className="bg-dark text-white d-flex flex-column p-3"
-      style={{
-        width: 260,
-        minWidth: 260,
-        maxWidth: 260,
-        height: "100vh",
-        position: "sticky",
-        top: 0,
-        flexShrink: 0,
-        overflowY: "auto",
-      }}
-    >
-      <div className="d-flex align-items-center gap-2 mb-4">
-        <div className="fw-bold">PechayGermination</div>
+    <aside className="app-sidebar d-flex flex-column">
+      <div className="app-sidebar__brand d-flex align-items-center gap-2">
+        <div>
+          <div className="app-sidebar__brand-title">PechayGermination</div>
+          <div className="app-sidebar__brand-subtitle">Monitoring Platform</div>
+        </div>
       </div>
 
-      <div className="text-uppercase small opacity-75 mb-2">Monitoring</div>
-      <Nav className="flex-column gap-1 mb-3">
-        <NavLink to="/dashboard" style={linkStyle}>
-          📊 Dashboard
-        </NavLink>
-        <NavLink to="/prediction" style={linkStyle}>
-          📈 Prediction
-        </NavLink>
-        <NavLink to="/maintainability" style={linkStyle}>
-          🛠️ Maintainability
-        </NavLink>
-      </Nav>
+      <div className="app-sidebar__group">
+        <div className="app-sidebar__label">Monitoring</div>
+        <Nav className="flex-column gap-1">
+          <NavLink to="/dashboard" end className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">📊</span>
+            <span>Dashboard</span>
+          </NavLink>
 
-      <div className="text-uppercase small opacity-75 mb-2">Controls</div>
-      <Nav className="flex-column gap-1">
-        <NavLink to="/parameters" style={linkStyle}>
-          ⚙️ Parameters
-        </NavLink>
-        <NavLink to="/testing" style={linkStyle}>
-          🧪 Testing
-        </NavLink>
-        <NavLink to="/validation" style={linkStyle}>
-          ✅ Validation
-        </NavLink>
-      </Nav>
+          <NavLink to="/prediction" className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">📈</span>
+            <span>Prediction</span>
+          </NavLink>
 
-      <div className="mt-auto pt-3 border-top border-light border-opacity-25">
+          <NavLink to="/maintainability" className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">🛠️</span>
+            <span>Maintainability</span>
+          </NavLink>
+        </Nav>
+      </div>
+
+      <div className="app-sidebar__group">
+        <div className="app-sidebar__label">Controls</div>
+        <Nav className="flex-column gap-1">
+          <NavLink to="/parameters" className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">⚙️</span>
+            <span>Parameters</span>
+          </NavLink>
+
+          <NavLink to="/testing" className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">🧪</span>
+            <span>Testing</span>
+          </NavLink>
+
+          <NavLink to="/validation" className={({ isActive }) => navLinkClass(isActive)}>
+            <span className="app-sidebar__icon">✅</span>
+            <span>Validation</span>
+          </NavLink>
+        </Nav>
+      </div>
+
+      <div className="app-sidebar__footer mt-auto">
         <Button
           variant="outline-light"
-          size="sm"
-          className="w-100"
+          className="app-sidebar__logout w-100"
           onClick={handleLogout}
         >
           Log Out
         </Button>
       </div>
-    </div>
+    </aside>
   );
+}
+
+function navLinkClass(isActive) {
+  return `app-sidebar__link ${isActive ? "is-active" : ""}`;
 }
 
 /* ---------------- Top Header ---------------- */
@@ -120,40 +118,29 @@ export function DashboardHeader({ title }) {
   const initial = (userName?.[0] || "U").toUpperCase();
 
   return (
-    <div
-      className="d-flex align-items-center justify-content-between border-bottom bg-white px-4 py-3"
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 20,
-      }}
-    >
+    <header className="app-header d-flex align-items-center justify-content-between">
       <div className="d-flex align-items-center gap-3">
-        <h4 className="mb-0 fw-bold">{title}</h4>
+        <div>
+          <h4 className="app-header__title mb-0">{title}</h4>
+        </div>
 
-        <div style={{ width: 1, height: 18, backgroundColor: "#e5e7eb" }} />
+        <div className="app-header__divider" />
 
-        <Badge
-          bg="success"
-          className="rounded-pill px-3 py-2 bg-opacity-10 text-success border border-success"
-        >
-          <span className="me-2">●</span> System Online
+        <Badge className="app-header__status rounded-pill">
+          <span className="app-header__status-dot" />
+          <span>System Online</span>
         </Badge>
       </div>
 
       <div className="d-flex align-items-center gap-3">
         <div className="text-end">
-          <div className="fw-semibold text-dark">{userName || "User"}</div>
-          <div className="small text-muted">Lead Researcher</div>
+          <div className="app-header__user-name">{userName || "User"}</div>
         </div>
 
-        <div
-          className="bg-dark text-white d-flex align-items-center justify-content-center fw-bold"
-          style={{ width: 40, height: 40, borderRadius: 999 }}
-        >
+        <div className="app-header__avatar d-flex align-items-center justify-content-center">
           {initial}
         </div>
       </div>
-    </div>
+    </header>
   );
 }

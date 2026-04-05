@@ -1,11 +1,22 @@
 import React from "react";
-import { Card, Button, Form, InputGroup, Alert, Row, Col, Badge, Spinner } from "react-bootstrap";
+import {
+  Card,
+  Button,
+  Form,
+  InputGroup,
+  Alert,
+  Row,
+  Col,
+  Badge,
+  Spinner,
+} from "react-bootstrap";
+import "./ParameterSection.css";
 
 const formatTo12Hour = (timeStr) => {
   if (!timeStr) return "--:--";
-  const [hours, minutes] = timeStr.split(':');
+  const [hours, minutes] = timeStr.split(":");
   let h = parseInt(hours);
-  const ampm = h >= 12 ? 'PM' : 'AM';
+  const ampm = h >= 12 ? "PM" : "AM";
   h = h % 12 || 12;
   return `${h}:${minutes} ${ampm}`;
 };
@@ -14,7 +25,6 @@ const formatMinutesToTime = (minutes, startTime = "00:00") => {
   if (!minutes) return "--";
 
   const [h, m] = startTime.split(":").map(Number);
-
   const startTotal = h * 60 + m;
   const endTotal = startTotal + Number(minutes);
 
@@ -33,28 +43,35 @@ export function ParameterHeader({
   onSequentialShutdown,
   isLocked,
   checkingStatus,
-  shutdownBusy
+  shutdownBusy,
 }) {
   return (
-    <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-      <div>
-        <h3 className="fw-bold mb-0">System Configuration</h3>
-        {checkingStatus ? (
-          <small className="text-muted">
-            <Spinner size="sm" animation="border" className="me-1" />
-            Verifying status...
-          </small>
-        ) : isLocked ? (
-          <small className="text-danger fw-bold">🔒 LOCKED: Batch pending germination detection.</small>
-        ) : (
-          <small className="text-success fw-bold">🔓 OPEN: Ready for optimization.</small>
-        )}
+    <div className="param-header">
+      <div className="param-header__content">
+        <span className="param-header__eyebrow">Control Center</span>
+        <h3 className="param-header__title">System Configuration</h3>
+
+        <div className="param-header__status">
+          {checkingStatus ? (
+            <span className="param-status param-status-neutral">
+              <Spinner size="sm" animation="border" className="me-2" />
+              Verifying status...
+            </span>
+          ) : isLocked ? (
+            <span className="param-status param-status-danger">
+              🔒 LOCKED: Batch pending germination detection.
+            </span>
+          ) : (
+            <span className="param-status param-status-success">
+              🔓 OPEN: Ready for optimization.
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="d-flex gap-2 flex-wrap align-items-center">
+      <div className="param-header__actions">
         <Button
-          variant="outline-danger"
-          className="px-4 rounded-pill"
+          className="param-btn param-btn-danger"
           onClick={onSequentialShutdown}
           disabled={shutdownBusy}
           title="Turn OFF active actuators one by one every 3 seconds"
@@ -63,8 +80,7 @@ export function ParameterHeader({
         </Button>
 
         <Button
-          variant="outline-secondary"
-          className="px-4 rounded-pill"
+          className="param-btn param-btn-muted"
           onClick={onReset}
           disabled={isLocked}
         >
@@ -72,8 +88,7 @@ export function ParameterHeader({
         </Button>
 
         <Button
-          variant="dark"
-          className="px-4 rounded-pill shadow-sm"
+          className="param-btn param-btn-primary"
           onClick={onSave}
           disabled={isLocked}
         >
@@ -84,7 +99,17 @@ export function ParameterHeader({
   );
 }
 
-export function ParameterField({ label, value, onChange, unit, isLocked }) {
+export function ParameterField({
+  label,
+  value,
+  onChange,
+  unit,
+  isLocked,
+  min,
+  max,
+  step = "0.01",
+  rangeText,
+}) {
   const handleChange = (e) => {
     const val = e.target.value;
     if (val === "" || /^-?\d*\.?\d{0,2}$/.test(val)) {
@@ -93,19 +118,26 @@ export function ParameterField({ label, value, onChange, unit, isLocked }) {
   };
 
   return (
-    <Card className={`shadow-sm border-0 rounded-4 h-100 ${isLocked ? 'bg-light opacity-75' : ''}`}>
-      <Card.Body className="p-3">
-        <div className="text-uppercase small text-muted fw-bold mb-2">{label}</div>
-        <InputGroup>
+    <Card className={`param-card h-100 ${isLocked ? "is-locked" : ""}`}>
+      <Card.Body className="param-card__body">
+        <div className="param-card__label-wrap">
+          <div className="param-card__label">{label}</div>
+          {rangeText && <div className="param-card__range">{rangeText}</div>}
+        </div>
+
+        <InputGroup className="param-input-group">
           <Form.Control
-            type="text"
+            type="number"
             inputMode="decimal"
             value={value}
             onChange={handleChange}
             disabled={isLocked}
-            className="py-2 border-end-0 bg-white"
+            min={min}
+            max={max}
+            step={step}
+            className="param-input"
           />
-          <InputGroup.Text className="bg-white text-muted fw-semibold border-start-0">
+          <InputGroup.Text className="param-input-addon">
             {unit}
           </InputGroup.Text>
         </InputGroup>
@@ -124,18 +156,27 @@ export function ParameterGrid({
   selectedBatchExists = false,
 }) {
   const latestBatchId =
-    latestBatch?.actual_batch || latestBatch?.batch_name || latestBatch?.batch_id || "";
+    latestBatch?.actual_batch ||
+    latestBatch?.batch_name ||
+    latestBatch?.batch_id ||
+    "";
 
   const latestIncomplete = latestBatch && !latestBatch.actual_germination_date;
 
   return (
     <Row className="g-3">
       <Col md={6} xl={4}>
-        <Card className="shadow-sm border-0 rounded-4 h-100 border-start border-success border-4">
-          <Card.Body className="p-3">
-            <div className="text-uppercase small text-success fw-bold mb-2">Active Batch</div>
+        <Card className="param-card param-card-accent-success h-100">
+          <Card.Body className="param-card__body">
+            <div className="param-card__label param-card__label-success">
+              Active Batch
+            </div>
+
             <Form.Group>
-              <Form.Label className="small text-muted mb-0">Batch ID / Name</Form.Label>
+              <Form.Label className="param-field-label">
+                Batch ID / Name
+              </Form.Label>
+
               <Form.Control
                 type="text"
                 list="batchList"
@@ -143,7 +184,9 @@ export function ParameterGrid({
                 onChange={(e) => setField("batch")(e.target.value)}
                 onFocus={(e) => e.target.select()}
                 placeholder="Type or select batch..."
+                className="param-input-single"
               />
+
               <datalist id="batchList">
                 {existingBatches.map((b) => {
                   const batchValue = b.actual_batch || b.batch_name || b.batch_id;
@@ -159,19 +202,21 @@ export function ParameterGrid({
                 })}
               </datalist>
 
-              <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
+              <small className="param-helper-text">
                 Select any existing batch to view it in read-only mode.
               </small>
 
               {selectedBatchExists && (
-                <small className="text-danger d-block mt-1" style={{ fontSize: "0.75rem" }}>
-                  Existing batch selected. Editing is disabled to preserve saved data.
+                <small className="param-helper-text param-helper-text-danger">
+                  Existing batch selected. Editing is disabled to preserve saved
+                  data.
                 </small>
               )}
 
               {newBatchBlocked && latestIncomplete && (
-                <small className="text-danger d-block mt-1" style={{ fontSize: "0.75rem" }}>
-                  New batch creation is blocked until latest batch ({latestBatchId}) is completed.
+                <small className="param-helper-text param-helper-text-danger">
+                  New batch creation is blocked until latest batch (
+                  {latestBatchId}) is completed.
                 </small>
               )}
             </Form.Group>
@@ -186,6 +231,10 @@ export function ParameterGrid({
           onChange={setField("ambientTemp")}
           unit="°C"
           isLocked={isLocked}
+          min={20}
+          max={30}
+          step="0.01"
+          rangeText="Allowed range: 20–30 °C"
         />
       </Col>
 
@@ -196,6 +245,10 @@ export function ParameterGrid({
           onChange={setField("ambientHum")}
           unit="%"
           isLocked={isLocked}
+          min={60}
+          max={70}
+          step="0.01"
+          rangeText="Allowed range: 60–70 %"
         />
       </Col>
 
@@ -206,6 +259,10 @@ export function ParameterGrid({
           onChange={setField("soilMoisture")}
           unit="%"
           isLocked={isLocked}
+          min={45}
+          max={70}
+          step="0.01"
+          rangeText="Allowed range: 45–70 %"
         />
       </Col>
 
@@ -216,29 +273,45 @@ export function ParameterGrid({
           onChange={setField("soilTemp")}
           unit="°C"
           isLocked={isLocked}
+          min={20}
+          max={23}
+          step="0.01"
+          rangeText="Allowed range: 20–23 °C"
         />
       </Col>
 
       <Col md={6} xl={4}>
-        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-primary border-4 ${isLocked ? "bg-light opacity-75" : ""}`}>
-          <Card.Body className="p-3">
-            <div className="d-flex justify-content-between align-items-start mb-2">
-              <div className="text-uppercase small text-primary fw-bold">UV Light</div>
-              <Badge bg="primary-subtle" className="text-primary border border-primary-subtle">
-                {formatTo12Hour(values.uvStart)}
-              </Badge>
-              <Badge bg="info">
-                Ends at: {formatMinutesToTime(values.uvDuration, values.uvStart)}
-              </Badge>
+        <Card
+          className={`param-card param-card-accent-primary h-100 ${
+            isLocked ? "is-locked" : ""
+          }`}
+        >
+          <Card.Body className="param-card__body">
+            <div className="param-schedule-head">
+              <div className="param-card__label param-card__label-primary">
+                UV Light
+              </div>
+
+              <div className="param-badge-stack">
+                <Badge className="param-badge">
+                  {formatTo12Hour(values.uvStart)}
+                </Badge>
+                <Badge className="param-badge">
+                  Ends at: {formatMinutesToTime(values.uvDuration, values.uvStart)}
+                </Badge>
+              </div>
             </div>
+
             <Form.Group className="mb-2">
               <Form.Control
                 type="time"
                 value={values.uvStart}
                 onChange={(e) => setField("uvStart")(e.target.value)}
                 disabled={isLocked}
+                className="param-input-single"
               />
             </Form.Group>
+
             <Form.Group>
               <Form.Control
                 type="number"
@@ -246,6 +319,7 @@ export function ParameterGrid({
                 onChange={(e) => setField("uvDuration")(e.target.value)}
                 disabled={isLocked}
                 placeholder="Mins"
+                className="param-input-single"
               />
             </Form.Group>
           </Card.Body>
@@ -253,25 +327,40 @@ export function ParameterGrid({
       </Col>
 
       <Col md={6} xl={4}>
-        <Card className={`shadow-sm border-0 rounded-4 h-100 border-start border-warning border-4 ${isLocked ? "bg-light opacity-75" : ""}`}>
-          <Card.Body className="p-3">
-            <div className="d-flex justify-content-between align-items-start mb-2">
-              <div className="text-uppercase small text-warning fw-bold">LED Light</div>
-              <Badge bg="warning-subtle" className="text-warning border border-warning-subtle">
-                {formatTo12Hour(values.ledStart)}
-              </Badge>
-              <Badge bg="info">
-                Ends at: {formatMinutesToTime(values.ledDuration, values.ledStart)}
-              </Badge>
+        <Card
+          className={`param-card param-card-accent-warning h-100 ${
+            isLocked ? "is-locked" : ""
+          }`}
+        >
+          <Card.Body className="param-card__body">
+            <div className="param-schedule-head">
+              <div className="param-card__label param-card__label-warning">
+                LED Light
+              </div>
+
+              <div className="param-badge-stack">
+                <Badge className="param-badge">
+                  {formatTo12Hour(values.ledStart)}
+                </Badge>
+                <Badge className="param-badge">
+                  Ends at: {formatMinutesToTime(
+                    values.ledDuration,
+                    values.ledStart
+                  )}
+                </Badge>
+              </div>
             </div>
+
             <Form.Group className="mb-2">
               <Form.Control
                 type="time"
                 value={values.ledStart}
                 onChange={(e) => setField("ledStart")(e.target.value)}
                 disabled={isLocked}
+                className="param-input-single"
               />
             </Form.Group>
+
             <Form.Group>
               <Form.Control
                 type="number"
@@ -279,6 +368,7 @@ export function ParameterGrid({
                 onChange={(e) => setField("ledDuration")(e.target.value)}
                 disabled={isLocked}
                 placeholder="Mins"
+                className="param-input-single"
               />
             </Form.Group>
           </Card.Body>
@@ -290,8 +380,14 @@ export function ParameterGrid({
 
 export function ParameterNote({ isLocked }) {
   return (
-    <Alert variant={isLocked ? "danger" : "warning"} className="mt-4 mb-0 rounded-4 border-0 shadow-sm">
-      <span className="fw-bold">{isLocked ? "READ-ONLY MODE:" : "NOTE:"}</span>{" "}
+    <Alert
+      className={`param-note mt-4 mb-0 ${
+        isLocked ? "param-note-danger" : "param-note-warning"
+      }`}
+    >
+      <span className="param-note__title">
+        {isLocked ? "READ-ONLY MODE:" : "NOTE:"}
+      </span>{" "}
       {isLocked
         ? "This batch configuration is archived or active. Parameters are locked to preserve experimental integrity."
         : "Optimization Layer is active. Any changes saved will be pushed to the Raspberry Pi 5 control system immediately."}

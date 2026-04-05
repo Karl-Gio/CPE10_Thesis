@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Dropdown } from "react-bootstrap";
 import {
   Container,
   Card,
@@ -12,7 +13,13 @@ import {
 } from "react-bootstrap";
 import { SideBar, DashboardHeader } from "../Layout/LayoutComponents";
 import { fetchBatches, fetchBatchDetails } from "./predictionService";
-import { formatDateTime, formatDuration, formatVariance, getAnalytics, } from "./predictionUtils";
+import {
+  formatDateTime,
+  formatDuration,
+  formatVariance,
+  getAnalytics,
+} from "./predictionUtils";
+import "./PredictionPage.css";
 
 export default function PredictionPage() {
   const [batches, setBatches] = useState([]);
@@ -74,165 +81,211 @@ export default function PredictionPage() {
 
   if (loading) {
     return (
-      <div className="p-5 text-center">
-        <Spinner animation="border" variant="success" />
+      <div className="prediction-page__state prediction-page__state--fullscreen">
+        <Spinner animation="border" className="prediction-page__spinner" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <Alert variant="danger" className="m-4">
-        {error}
-      </Alert>
+      <div className="prediction-page__state-shell">
+        <Alert
+          variant="danger"
+          className="prediction-page__alert prediction-page__alert--error"
+        >
+          {error}
+        </Alert>
+      </div>
     );
   }
 
   return (
-    <div
-      className="d-flex"
-      style={{ background: "#f5f7fb", minHeight: "100vh" }}
-    >
+    <div className="prediction-page d-flex">
       <SideBar />
 
-      <div className="flex-grow-1">
+      <div className="prediction-page__content flex-grow-1">
         <DashboardHeader title="Germination Analytics & Prediction" />
 
-        <Container fluid className="py-4" style={{ maxWidth: "1200px" }}>
-          <Card className="shadow-sm border-0 rounded-4">
-            <Card.Body className="p-4">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="fw-bold mb-0">Optimization Analysis</h3>
-                <Badge
-                  bg="light"
-                  className="text-muted border fw-normal py-2 px-3"
-                >
-                  <i className="bi bi-cpu me-1"></i>
-                  Server Response:{" "}
-                  <span className="fw-bold text-dark">{dbLatency}ms</span>
-                </Badge>
+        <Container fluid className="prediction-page__container">
+          <Card className="prediction-page__panel">
+            <Card.Body className="prediction-page__panel-body">
+              <div className="prediction-page__panel-header d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                <div>
+                  <div className="prediction-page__eyebrow">
+                    Prediction Overview
+                  </div>
+                  <h3 className="prediction-page__title mb-0">
+                    Optimization Analysis
+                  </h3>
+                </div>
+
+                <div className="prediction-page__latency-chip">
+                  <span className="prediction-page__latency-label">
+                    Server Response
+                  </span>
+                  <span className="prediction-page__latency-value">
+                    {dbLatency}ms
+                  </span>
+                </div>
               </div>
 
-              <Card className="border-0 shadow-sm rounded-4 mb-4 bg-light">
-                <Card.Body className="p-3">
-                  <Row className="g-3 align-items-center">
-                    <Col md={6}>
-                      <div className="text-uppercase small text-muted fw-bold mb-1">
-                        Active Batch
-                      </div>
-                      <Form.Select
-                        value={selectedBatchId}
-                        onChange={(e) => setSelectedBatchId(e.target.value)}
-                        className="fw-bold border-0 shadow-sm"
-                      >
-                        {batches.map((batch) => (
-                          <option key={batch.batch_id} value={batch.batch_id}>
-                            {batch.batch_id}
-                          </option>
-                        ))}
-                      </Form.Select>
+              <Card className="prediction-page__filter-card mb-4">
+                <Card.Body className="prediction-page__filter-body">
+                  <Row className="g-3 align-items-end">
+                    <Col md={7}>
+                      <Form.Group>
+                        <Form.Label className="prediction-page__field-label">
+                          Active Batch
+                        </Form.Label>
+
+                        <Dropdown className="prediction-page__dropdown">
+                          <Dropdown.Toggle className="prediction-page__dropdown-toggle w-100 text-start">
+                            {selectedBatchId || "Select Batch"}
+                          </Dropdown.Toggle>
+
+                          <Dropdown.Menu className="prediction-page__dropdown-menu w-100">
+                            {batches.map((batch) => (
+                              <Dropdown.Item
+                                key={batch.batch_id}
+                                onClick={() =>
+                                  setSelectedBatchId(batch.batch_id)
+                                }
+                                active={selectedBatchId === batch.batch_id}
+                              >
+                                {batch.batch_id}
+                              </Dropdown.Item>
+                            ))}
+                          </Dropdown.Menu>
+                        </Dropdown>
+                      </Form.Group>
                     </Col>
 
-                    <Col md={6}>
-                      <div className="text-uppercase small text-muted fw-bold mb-1">
-                        Status
+                    <Col md={5}>
+                      <div className="prediction-page__field-label">Status</div>
+                      <div className="prediction-page__status-wrap">
+                        <Badge
+                          className={`prediction-page__status-badge ${
+                            analytics?.isCompleted
+                              ? "prediction-page__status-badge--success"
+                              : "prediction-page__status-badge--warning"
+                          }`}
+                        >
+                          {analytics?.isCompleted
+                            ? "GERMINATION VALIDATED"
+                            : "GROWTH IN PROGRESS"}
+                        </Badge>
                       </div>
-                      <Badge
-                        bg={analytics?.isCompleted ? "success" : "warning"}
-                        className="px-3 py-2"
-                      >
-                        {analytics?.isCompleted
-                          ? "✅ GERMINATION VALIDATED"
-                          : "⏳ GROWTH IN PROGRESS"}
-                      </Badge>
                     </Col>
                   </Row>
                 </Card.Body>
               </Card>
 
               {detailsLoading ? (
-                <div className="p-5 text-center">
-                  <Spinner animation="border" variant="success" />
+                <div className="prediction-page__state">
+                  <Spinner
+                    animation="border"
+                    className="prediction-page__spinner"
+                  />
                 </div>
               ) : batchData && analytics ? (
                 <>
                   <Row className="g-4 mb-4">
-                    <Col md={3}>
-                      <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-primary border-4">
-                        <div className="text-muted fw-semibold small text-uppercase">
-                          AI Prediction
-                        </div>
-                        <div className="h4 fw-bold my-2 text-primary">
-                          {formatDuration(analytics.predictedDays)}
-                        </div>
-                        <div className="small text-muted">Random Forest</div>
+                    <Col md={6} xl={3}>
+                      <Card className="prediction-metric-card prediction-metric-card--primary h-100">
+                        <Card.Body className="prediction-metric-card__body">
+                          <div className="prediction-metric-card__label">
+                            AI Prediction
+                          </div>
+                          <div className="prediction-metric-card__value">
+                            {formatDuration(analytics.predictedDays)}
+                          </div>
+                          <div className="prediction-metric-card__meta">
+                            Random Forest
+                          </div>
+                        </Card.Body>
                       </Card>
                     </Col>
 
-                    <Col md={3}>
-                      <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-info border-4">
-                        <div className="text-muted fw-semibold small text-uppercase">
-                          Target Date
-                        </div>
-                        <div className="h5 fw-bold my-3 text-dark">
-                          {formatDateTime(analytics.predictedDate)}
-                        </div>
-                        <div className="small text-muted">Estimated Sprout</div>
+                    <Col md={6} xl={3}>
+                      <Card className="prediction-metric-card prediction-metric-card--info h-100">
+                        <Card.Body className="prediction-metric-card__body">
+                          <div className="prediction-metric-card__label">
+                            Target Date
+                          </div>
+                          <div className="prediction-metric-card__value prediction-metric-card__value--date">
+                            {formatDateTime(analytics.predictedDate)}
+                          </div>
+                          <div className="prediction-metric-card__meta">
+                            Estimated Sprout
+                          </div>
+                        </Card.Body>
                       </Card>
                     </Col>
 
-                    <Col md={3}>
-                      <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-success border-4">
-                        <div className="text-muted fw-semibold small text-uppercase">
-                          Actual Growth
-                        </div>
-                        <div className="h4 fw-bold my-2 text-success">
-                          {analytics.actualDays !== null
-                            ? formatDuration(analytics.actualDays)
-                            : "---"}
-                        </div>
-                        <div className="small text-muted">YOLOv8 Validated</div>
+                    <Col md={6} xl={3}>
+                      <Card className="prediction-metric-card prediction-metric-card--success h-100">
+                        <Card.Body className="prediction-metric-card__body">
+                          <div className="prediction-metric-card__label">
+                            Actual Growth
+                          </div>
+                          <div className="prediction-metric-card__value">
+                            {analytics.actualDays !== null
+                              ? formatDuration(analytics.actualDays)
+                              : "---"}
+                          </div>
+                          <div className="prediction-metric-card__meta">
+                            YOLOv8 Validated
+                          </div>
+                        </Card.Body>
                       </Card>
                     </Col>
 
-                    <Col md={3}>
-                      <Card className="border-0 shadow-sm rounded-4 h-100 text-center p-3 border-bottom border-danger border-4">
-                        <div className="text-muted fw-semibold small text-uppercase">
-                          Model Variance
-                        </div>
-                        <div
-                          className={`h4 fw-bold my-2 ${
-                            analytics.variance !== null &&
-                            Math.abs(analytics.variance) < 0.5
-                              ? "text-success"
-                              : "text-danger"
-                          }`}
-                        >
-                          {formatVariance(analytics.variance)}
-                        </div>
-                        <div className="small">
-                          {analytics.variance !== null &&
-                          Math.abs(analytics.variance) < 1 ? (
-                            <Badge bg="success-subtle" className="text-success">
-                              High Accuracy
-                            </Badge>
-                          ) : (
-                            <Badge bg="warning-subtle" className="text-warning">
-                              Check Sensors
-                            </Badge>
-                          )}
-                        </div>
+                    <Col md={6} xl={3}>
+                      <Card className="prediction-metric-card prediction-metric-card--danger h-100">
+                        <Card.Body className="prediction-metric-card__body">
+                          <div className="prediction-metric-card__label">
+                            Model Variance
+                          </div>
+                          <div
+                            className={`prediction-metric-card__value ${
+                              analytics.variance !== null &&
+                              Math.abs(analytics.variance) < 0.5
+                                ? "prediction-metric-card__value--good"
+                                : "prediction-metric-card__value--danger"
+                            }`}
+                          >
+                            {formatVariance(analytics.variance)}
+                          </div>
+                          <div className="prediction-metric-card__meta">
+                            {analytics.variance !== null &&
+                            Math.abs(analytics.variance) < 1 ? (
+                              <Badge className="prediction-page__mini-badge prediction-page__mini-badge--success">
+                                High Accuracy
+                              </Badge>
+                            ) : (
+                              <Badge className="prediction-page__mini-badge prediction-page__mini-badge--warning">
+                                Check Sensors
+                              </Badge>
+                            )}
+                          </div>
+                        </Card.Body>
                       </Card>
                     </Col>
                   </Row>
 
-                  <h5 className="fw-bold mb-3">Model Performance Metrics</h5>
-                  <div className="table-responsive">
+                  <div className="prediction-page__section mb-3">
+                    <h5 className="prediction-page__section-title mb-0">
+                      Model Performance Metrics
+                    </h5>
+                  </div>
+
+                  <div className="prediction-page__table-shell table-responsive">
                     <Table
                       hover
-                      className="align-middle bg-white rounded-3 overflow-hidden border"
+                      className="prediction-page__table align-middle mb-0"
                     >
-                      <thead className="table-light text-uppercase small">
+                      <thead>
                         <tr>
                           <th>Batch Identification</th>
                           <th>Planted</th>
@@ -243,24 +296,27 @@ export default function PredictionPage() {
                       </thead>
                       <tbody>
                         <tr>
-                          <td className="fw-bold">{batchData.batch_id}</td>
+                          <td className="prediction-page__cell-strong">
+                            {batchData.batch_id}
+                          </td>
                           <td>{formatDateTime(batchData.date_planted)}</td>
-                          <td className="text-primary fw-semibold">
+                          <td className="prediction-page__text-primary">
                             {formatDateTime(analytics.predictedDate)}
                           </td>
-                          <td className="text-success fw-semibold">
+                          <td className="prediction-page__text-success">
                             {batchData.actual_germination_date
-                              ? formatDateTime(batchData.actual_germination_date)
+                              ? formatDateTime(
+                                  batchData.actual_germination_date,
+                                )
                               : "Awaiting Detection..."}
                           </td>
                           <td className="text-center">
                             <Badge
-                              bg={
+                              className={`prediction-page__mini-badge ${
                                 dbLatency < 200
-                                  ? "success-subtle"
-                                  : "warning-subtle"
-                              }
-                              className="text-dark border"
+                                  ? "prediction-page__mini-badge--success"
+                                  : "prediction-page__mini-badge--warning"
+                              }`}
                             >
                               {dbLatency} ms
                             </Badge>
@@ -272,7 +328,7 @@ export default function PredictionPage() {
 
                   <Alert
                     variant="info"
-                    className="mt-3 border-0 shadow-sm rounded-4 small"
+                    className="prediction-page__alert prediction-page__alert--info mt-4"
                   >
                     <strong>Insight:</strong> This shows how close the Random
                     Forest prediction is to the actual plant growth. A smaller
@@ -281,7 +337,10 @@ export default function PredictionPage() {
                   </Alert>
                 </>
               ) : (
-                <Alert variant="secondary" className="border-0 rounded-4">
+                <Alert
+                  variant="secondary"
+                  className="prediction-page__alert prediction-page__alert--empty"
+                >
                   No batch data available.
                 </Alert>
               )}
